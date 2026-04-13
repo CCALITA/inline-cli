@@ -42,7 +42,7 @@ curl -sSL https://raw.githubusercontent.com/CCALITA/inline-cli/main/scripts/inst
 Or build from source:
 
 ```sh
-git clone https://github.com/user/inline-cli.git
+git clone https://github.com/CCALITA/inline-cli.git
 cd inline-cli
 make build
 # Binary is at ./build/inline-cli
@@ -76,7 +76,7 @@ Restart your shell. Done.
 
 1. **Shell integration** — A zsh widget captures your command-line buffer on <kbd>Shift</kbd>+<kbd>Enter</kbd> (or <kbd>Ctrl</kbd>+<kbd>J</kbd>) and pipes it to the CLI.
 2. **Background daemon** — A long-lived Go process manages conversation sessions over a Unix domain socket. Sub-millisecond IPC. No cold start per query.
-3. **Claude API client** — Streams responses via SSE, rendered as markdown in your terminal.
+3. **Pluggable backend** — Talks to Claude via direct API, the `claude` CLI, or ACP. Streams responses as markdown to your terminal.
 
 ### Directory-scoped sessions
 
@@ -124,27 +124,51 @@ inline-cli query --prompt "list 5 unix commands" --raw
 Config lives at `~/.inline-cli/config.toml`. All fields are optional — defaults are sensible.
 
 ```toml
-# API key (or set ANTHROPIC_API_KEY env var)
-api_key = "sk-ant-..."
+# Backend: "api" (default), "cli", or "acp"
+backend = "api"
 
-# Model (default: claude-sonnet-4-20250514)
-model = "claude-sonnet-4-20250514"
+# API backend settings
+api_key = "sk-ant-..."                    # or set ANTHROPIC_API_KEY env var
+model = "claude-sonnet-4-20250514"        # default model
+api_base_url = ""                         # custom API endpoint (proxy, gateway)
 
-# Session idle timeout in minutes (default: 30)
+# CLI backend settings (uses `claude` command)
+cli_path = ""                             # auto-detected from PATH if empty
+
+# Session settings
 max_session_idle_minutes = 30
-
-# Max messages per session before oldest are dropped (default: 50)
 max_messages = 50
+```
+
+### Backends
+
+| Backend             | Config                    | What it does                                                                       |
+| ------------------- | ------------------------- | ---------------------------------------------------------------------------------- |
+| **`api`** (default) | Needs `ANTHROPIC_API_KEY` | Direct HTTPS to Anthropic Messages API with SSE streaming                          |
+| **`cli`**           | Needs `claude` in PATH    | Execs `claude -p <prompt>` and streams stdout. Uses your existing claude CLI auth. |
+| **`acp`**           | —                         | Agent Communication Protocol (planned)                                             |
+
+Switch backends via config file or env var:
+
+```sh
+# Use claude CLI instead of direct API
+export INLINE_CLI_BACKEND=cli
+
+# Or in config.toml
+backend = "cli"
 ```
 
 ### Environment variables
 
-| Variable | Purpose |
-|----------|---------|
-| `ANTHROPIC_API_KEY` | API key (required) |
-| `INLINE_CLI_MODEL` | Override model |
-| `INLINE_CLI_SOCKET` | Custom socket path |
-| `INLINE_CLI_MAX_IDLE` | Session idle timeout (minutes) |
+| Variable                  | Purpose                                |
+| ------------------------- | -------------------------------------- |
+| `ANTHROPIC_API_KEY`       | API key (required for `api` backend)   |
+| `INLINE_CLI_BACKEND`      | Backend selection: `api`, `cli`, `acp` |
+| `INLINE_CLI_MODEL`        | Override model                         |
+| `INLINE_CLI_SOCKET`       | Custom socket path                     |
+| `INLINE_CLI_API_BASE_URL` | Custom API endpoint                    |
+| `INLINE_CLI_CLI_PATH`     | Path to `claude` binary                |
+| `INLINE_CLI_MAX_IDLE`     | Session idle timeout (minutes)         |
 
 Precedence: env vars > config file > defaults.
 
@@ -152,28 +176,37 @@ Precedence: env vars > config file > defaults.
 
 ### Shift+Enter works natively
 
-These terminals support the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/), so <kbd>Shift</kbd>+<kbd>Enter</kbd> is detected as a distinct keystroke:
+inline-cli auto-detects your terminal and enables the right protocol:
 
-| Terminal | Status |
-|----------|--------|
-| **kitty** | Full support |
-| **WezTerm** | Full support |
-| **ghostty** | Full support |
+**Kitty keyboard protocol** (CSI u):
+
+| Terminal          | Status       |
+| ----------------- | ------------ |
+| **kitty**         | Full support |
+| **WezTerm**       | Full support |
+| **ghostty**       | Full support |
 | **iTerm2** (3.5+) | Full support |
-| **foot** | Full support |
+| **foot**          | Full support |
+
+**xterm modifyOtherKeys** (CSI 27;2;13~):
+
+| Terminal                              | Status       |
+| ------------------------------------- | ------------ |
+| **xterm**                             | Full support |
+| **VTE-based** (GNOME Terminal, Tilix) | Full support |
+
+Both protocols are bound automatically — no manual configuration needed.
 
 ### Fallback: Ctrl+J
 
-All other terminals use <kbd>Ctrl</kbd>+<kbd>J</kbd>. Works everywhere, no special protocol needed.
+Terminals that support neither protocol use <kbd>Ctrl</kbd>+<kbd>J</kbd>:
 
-| Terminal | Keybinding |
-|----------|-----------|
+| Terminal                 | Keybinding                   |
+| ------------------------ | ---------------------------- |
 | **Terminal.app** (macOS) | <kbd>Ctrl</kbd>+<kbd>J</kbd> |
-| **GNOME Terminal** | <kbd>Ctrl</kbd>+<kbd>J</kbd> |
-| **Alacritty** | <kbd>Ctrl</kbd>+<kbd>J</kbd> |
-| **tmux** | <kbd>Ctrl</kbd>+<kbd>J</kbd> |
+| **Alacritty**            | <kbd>Ctrl</kbd>+<kbd>J</kbd> |
 
-> **Note:** In tmux, extended key sequences are stripped by default. <kbd>Ctrl</kbd>+<kbd>J</kbd> always works. For Shift+Enter support, add `set -g extended-keys on` to your tmux config.
+> **tmux note:** Extended key sequences are stripped by default. <kbd>Ctrl</kbd>+<kbd>J</kbd> always works. For Shift+Enter, add `set -g extended-keys on` to your tmux config.
 
 ## Powerlevel10k integration
 
@@ -200,6 +233,7 @@ PROMPT='$(inline_cli_prompt_info)'$PROMPT
 inline-cli/
 ├── cmd/inline-cli/       # CLI entry point + embedded shell scripts
 ├── internal/
+│   ├── backend/          # Backend interface + implementations (API, CLI, ACP)
 │   ├── claude/           # Claude API client + SSE streaming parser
 │   ├── config/           # Config loading (TOML + env vars)
 │   ├── daemon/           # Daemon lifecycle + Unix socket server
@@ -217,7 +251,7 @@ Single Go binary, ~14MB. No runtime dependencies.
 - **Go 1.22+** (build only)
 - **macOS** or **Linux**
 - **zsh** (bash and fish support planned)
-- An [Anthropic API key](https://console.anthropic.com/)
+- One of: [Anthropic API key](https://console.anthropic.com/), `claude` CLI installed, or ACP endpoint
 
 ## Uninstall
 
@@ -231,4 +265,3 @@ Remove the `# >>> inline-cli >>>` block from your `.zshrc`.
 ## License
 
 MIT
-# inline-cli

@@ -87,10 +87,13 @@ install_shell_integration() {
     return
   fi
 
-  if [ "$shell" != "zsh" ]; then
-    warn "only zsh is supported in this version — skipping shell integration for $shell"
-    return
-  fi
+  case "$shell" in
+    zsh|bash) ;;
+    *)
+      warn "shell '$shell' is not yet supported — skipping shell integration (supported: zsh, bash)"
+      return
+      ;;
+  esac
 
   # Create config file if it doesn't exist.
   touch "$config_file"
@@ -107,7 +110,7 @@ install_shell_integration() {
   # Add integration.
   cat >> "$config_file" << EOF
 $MARKER_START
-eval "\$($INSTALL_DIR/inline-cli init zsh)"
+eval "\$($INSTALL_DIR/inline-cli init $shell)"
 $MARKER_END
 EOF
 

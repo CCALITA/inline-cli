@@ -10,23 +10,35 @@ import (
 // CLIBackend uses the `claude` CLI tool as the backend.
 // It execs `claude -p <prompt>` and streams stdout.
 type CLIBackend struct {
-	binaryPath string
+	// Configured path to the claude binary. Empty means auto-detect via PATH.
+	configuredPath string
 }
 
 // NewCLIBackend creates a backend that delegates to the claude CLI.
-// If binaryPath is empty, it looks for "claude" in PATH.
+// If binaryPath is empty, it will look for "claude" in PATH on each query.
 func NewCLIBackend(binaryPath string) (*CLIBackend, error) {
-	if binaryPath == "" {
-		path, err := exec.LookPath("claude")
-		if err != nil {
-			return nil, fmt.Errorf("claude CLI not found in PATH: %w", err)
-		}
-		binaryPath = path
+	return &CLIBackend{configuredPath: binaryPath}, nil
+}
+
+// resolveBinary finds the claude binary, resolving PATH on each call so it
+// picks up installs, upgrades, and PATH changes without a daemon restart.
+func (b *CLIBackend) resolveBinary() (string, error) {
+	if b.configuredPath != "" {
+		return b.configuredPath, nil
 	}
-	return &CLIBackend{binaryPath: binaryPath}, nil
+	path, err := exec.LookPath("claude")
+	if err != nil {
+		return "", fmt.Errorf("claude CLI not found in PATH: %w", err)
+	}
+	return path, nil
 }
 
 func (b *CLIBackend) Query(messages []Message, model string, onChunk func(text string)) (string, error) {
+	binaryPath, err := b.resolveBinary()
+	if err != nil {
+		return "", err
+	}
+
 	// Build the prompt: use the last user message as the primary prompt.
 	// Pass conversation history as context via --system-prompt.
 	var prompt string
@@ -60,7 +72,7 @@ func (b *CLIBackend) Query(messages []Message, model string, onChunk func(text s
 		args = append(args, "--system-prompt", systemCtx)
 	}
 
-	cmd := exec.Command(b.binaryPath, args...)
+	cmd := exec.Command(binaryPath, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

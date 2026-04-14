@@ -21,6 +21,9 @@ var version = "dev"
 //go:embed shell_zsh.sh
 var zshScript string
 
+//go:embed shell_bash.sh
+var bashScript string
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:     "inline-cli",
@@ -107,9 +110,9 @@ func newInitCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:       "init [shell]",
 		Short:     "Output shell integration script",
-		Long:      "Output shell integration script to stdout. Add `eval \"$(inline-cli init zsh)\"` to your .zshrc.",
+		Long:      "Output shell integration script to stdout.\n  zsh:  eval \"$(inline-cli init zsh)\"\n  bash: eval \"$(inline-cli init bash)\"",
 		Args:      cobra.ExactArgs(1),
-		ValidArgs: []string{"zsh"},
+		ValidArgs: []string{"zsh", "bash"},
 		RunE:      runInit,
 	}
 }
@@ -303,8 +306,15 @@ func runStopSession(cmd *cobra.Command, args []string) error {
 
 func runInit(cmd *cobra.Command, args []string) error {
 	shell := args[0]
-	if shell != "zsh" {
-		return fmt.Errorf("unsupported shell: %s (only zsh is supported in this version)", shell)
+
+	var script string
+	switch shell {
+	case "zsh":
+		script = zshScript
+	case "bash":
+		script = bashScript
+	default:
+		return fmt.Errorf("unsupported shell: %s (supported: zsh, bash)", shell)
 	}
 
 	binaryPath, err := os.Executable()
@@ -313,7 +323,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Output the shell script with the binary path substituted.
-	script := strings.ReplaceAll(zshScript, "{{INLINE_CLI_BIN}}", binaryPath)
+	script = strings.ReplaceAll(script, "{{INLINE_CLI_BIN}}", binaryPath)
 	fmt.Print(script)
 	return nil
 }

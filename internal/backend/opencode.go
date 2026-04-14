@@ -2,13 +2,15 @@ package backend
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
 )
 
 // OpenCodeBackend uses the `opencode` CLI tool as the backend.
-// It execs `opencode run <message>` and streams stdout.
+// It invokes `opencode run --format json <message>` and parses the
+// newline-delimited JSON event stream from stdout.
 type OpenCodeBackend struct {
 	binaryPath string
 }
@@ -24,6 +26,14 @@ func NewOpenCodeBackend(binaryPath string) (*OpenCodeBackend, error) {
 		binaryPath = path
 	}
 	return &OpenCodeBackend{binaryPath: binaryPath}, nil
+}
+
+// openCodeEvent represents a single JSON event from `opencode run --format json`.
+type openCodeEvent struct {
+	Type string `json:"type"`
+	Part struct {
+		Text string `json:"text"`
+	} `json:"part"`
 }
 
 func (b *OpenCodeBackend) Query(messages []Message, model string, onChunk func(text string)) (string, error) {
@@ -55,12 +65,14 @@ func (b *OpenCodeBackend) Query(messages []Message, model string, onChunk func(t
 		prompt = historyCtx + prompt
 	}
 
-	// opencode uses `opencode run <message>` for non-interactive mode.
-	// --format json gives structured events but "default" streams text to stdout.
-	args := []string{"run", prompt}
+	// opencode uses `opencode run --format json <message>` for non-interactive mode.
+	// Default format writes to stderr with ANSI codes; JSON format writes
+	// newline-delimited JSON events to stdout which we can parse.
+	args := []string{"run", "--format", "json"}
 	if model != "" {
 		args = append(args, "--model", model)
 	}
+	args = append(args, prompt)
 
 	cmd := exec.Command(b.binaryPath, args...)
 
@@ -75,18 +87,22 @@ func (b *OpenCodeBackend) Query(messages []Message, model string, onChunk func(t
 
 	var fullResponse strings.Builder
 	scanner := bufio.NewScanner(stdout)
-	scanner.Split(scanChunks)
-
+	// Each JSON event is a single line.
 	for scanner.Scan() {
-		chunk := scanner.Text()
-		fullResponse.WriteString(chunk)
-		if onChunk != nil {
-			onChunk(chunk)
+		line := scanner.Bytes()
+		var event openCodeEvent
+		if err := json.Unmarshal(line, &event); err != nil {
+			continue
+		}
+		if event.Type == "text" && event.Part.Text != "" {
+			fullResponse.WriteString(event.Part.Text)
+			if onChunk != nil {
+				onChunk(event.Part.Text)
+			}
 		}
 	}
 
 	if err := cmd.Wait(); err != nil {
-		// If we already got some output, return it with the error.
 		if fullResponse.Len() > 0 {
 			return fullResponse.String(), fmt.Errorf("opencode CLI exited with error: %w", err)
 		}

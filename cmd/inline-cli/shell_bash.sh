@@ -5,6 +5,11 @@
 # Binary path (substituted at init time).
 INLINE_CLI_BIN="{{INLINE_CLI_BIN}}"
 
+# ── Session state ─────────────────────────────────────────────────────
+# Tracks which directory has an active session. Set on query, cleared on chpwd.
+
+_INLINE_CLI_SESSION_DIR=""
+
 # ── Readline function ─────────────────────────────────────────────────
 
 _inline_cli_query() {
@@ -19,6 +24,9 @@ _inline_cli_query() {
 
   # Run the query. Output goes directly to terminal.
   "$INLINE_CLI_BIN" query --dir "$PWD" --prompt "$prompt_text" </dev/tty
+
+  # Mark session active for this directory.
+  _INLINE_CLI_SESSION_DIR="$PWD"
 }
 
 # ── Keybinding ─────────────────────────────────────────────────────────
@@ -48,6 +56,8 @@ _inline_cli_chpwd() {
   if [[ "$PWD" != "$_inline_cli_prev_pwd" ]]; then
     "$INLINE_CLI_BIN" stop-session --dir "$_inline_cli_prev_pwd" 2>/dev/null &
     _inline_cli_prev_pwd="$PWD"
+    # Session ended for the old dir; no session yet in the new dir.
+    _INLINE_CLI_SESSION_DIR=""
   fi
 }
 
@@ -59,14 +69,11 @@ else
 fi
 
 # ── Prompt indicator ──────────────────────────────────────────────────
+# Shows ● only when there is an active session for the current directory.
 
-# Outputs the indicator with readline-safe markers (\001/\002 are the raw
-# bytes that \[/\] expand to — needed because \[/\] don't work inside
-# command substitution).
 _inline_cli_indicator() {
-  local sock="${INLINE_CLI_SOCKET:-/tmp/inline-cli-$(id -u).sock}"
-  if [[ -S "$sock" ]]; then
-    printf '\001\033[32m\002●\001\033[0m\002 '
+  if [[ "$_INLINE_CLI_SESSION_DIR" == "$PWD" ]]; then
+    printf '👀 '
   fi
 }
 

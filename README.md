@@ -48,10 +48,14 @@ make build
 # Binary is at ./build/inline-cli
 ```
 
-Then add to your `.zshrc`:
+Then add to your shell config:
 
 ```sh
+# zsh (~/.zshrc)
 eval "$(inline-cli init zsh)"
+
+# bash (~/.bashrc)
+eval "$(inline-cli init bash)"
 ```
 
 Set your API key:
@@ -66,7 +70,7 @@ Restart your shell. Done.
 
 ```
  ┌─────────────────┐     Unix socket     ┌──────────────┐     HTTPS/SSE     ┌───────────┐
- │  zsh (ZLE widget)│ ──────────────────> │  daemon      │ ─────────────────>│ Claude API│
+ │  shell widget    │ ──────────────────> │  daemon      │ ─────────────────>│ Claude API│
  │  captures buffer │ <── NDJSON stream── │  per-dir     │ <── streaming ──  │           │
  │  renders output  │                     │  sessions    │                   │           │
  └─────────────────┘                     └──────────────┘                   └───────────┘
@@ -74,7 +78,7 @@ Restart your shell. Done.
 
 **Three pieces:**
 
-1. **Shell integration** — A zsh widget captures your command-line buffer on <kbd>Shift</kbd>+<kbd>Enter</kbd> (or <kbd>Ctrl</kbd>+<kbd>J</kbd>) and pipes it to the CLI.
+1. **Shell integration** — A zsh ZLE widget or bash readline binding captures your command-line buffer on <kbd>Shift</kbd>+<kbd>Enter</kbd> (or <kbd>Ctrl</kbd>+<kbd>J</kbd>) and pipes it to the CLI.
 2. **Background daemon** — A long-lived Go process manages conversation sessions over a Unix domain socket. Sub-millisecond IPC. No cold start per query.
 3. **Pluggable backend** — Talks to Claude via direct API, the `claude` CLI, or ACP. Streams responses as markdown to your terminal.
 
@@ -82,19 +86,23 @@ Restart your shell. Done.
 
 Every directory gets its own conversation. Ask a follow-up question in the same directory and the daemon remembers context. Change directories and the old session stops automatically.
 
+A session indicator appears in your prompt while a session is active:
+
 ```
-~/project $ explain the auth middleware ⇧↵
+👀 ~/project $ explain the auth middleware ⇧↵
   ... (streaming response) ...
 
-~/project $ what about the rate limiter? ⇧↵
+👀 ~/project $ what about the rate limiter? ⇧↵
   ... (knows you're still talking about this project) ...
 
 cd ~/other-project
-  (previous session ends)
+  (previous session ends, 👀 disappears)
 
 ~/other-project $ how does the build work here? ⇧↵
-  ... (fresh session, fresh context) ...
+  ... (fresh session, 👀 appears again) ...
 ```
+
+The indicator auto-detects your prompt framework (Powerlevel10k, Starship, plain zsh/bash) and injects itself without overwriting your existing prompt. Set `INLINE_CLI_NO_PROMPT=1` to disable it.
 
 ### Auto-start
 
@@ -106,17 +114,13 @@ The primary interface is the keybinding — type and press <kbd>Shift</kbd>+<kbd
 
 ```sh
 # Direct query
-inline-cli query --prompt "explain git rebase --onto"
-
+shift + enter
 # Check what's running
 inline-cli status
 
 # Manage the daemon
 inline-cli daemon start
 inline-cli daemon stop
-
-# Raw output (no markdown rendering)
-inline-cli query --prompt "list 5 unix commands" --raw
 ```
 
 ## Configuration
@@ -169,8 +173,16 @@ backend = "cli"
 | `INLINE_CLI_API_BASE_URL` | Custom API endpoint                    |
 | `INLINE_CLI_CLI_PATH`     | Path to `claude` binary                |
 | `INLINE_CLI_MAX_IDLE`     | Session idle timeout (minutes)         |
+| `INLINE_CLI_NO_PROMPT`    | Set to `1` to disable prompt indicator |
 
 Precedence: env vars > config file > defaults.
+
+## Supported shells
+
+| Shell    | Integration           | Keybinding                                                  |
+| -------- | --------------------- | ----------------------------------------------------------- |
+| **zsh**  | ZLE widget            | <kbd>Ctrl</kbd>+<kbd>J</kbd>, Shift+Enter (CSI u / xterm)  |
+| **bash** | `bind -x` / readline  | <kbd>Ctrl</kbd>+<kbd>J</kbd>, Shift+Enter (terminal remap) |
 
 ## Supported terminals
 
@@ -208,24 +220,29 @@ Terminals that support neither protocol use <kbd>Ctrl</kbd>+<kbd>J</kbd>:
 
 > **tmux note:** Extended key sequences are stripped by default. <kbd>Ctrl</kbd>+<kbd>J</kbd> always works. For Shift+Enter, add `set -g extended-keys on` to your tmux config.
 
-## Powerlevel10k integration
+## Prompt indicator
 
-inline-cli ships a p10k prompt segment. Add `inline_cli` to your prompt elements:
+A 👀 emoji appears in your prompt while a session is active for the current directory. It auto-detects your setup:
 
-```zsh
-# In ~/.p10k.zsh
-typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
-  ...
-  inline_cli  # green dot when daemon is active
-  ...
-)
+| Prompt framework     | How it works                                                |
+| -------------------- | ----------------------------------------------------------- |
+| **Powerlevel10k**    | Auto-registers `inline_cli` segment in right prompt         |
+| **Starship**         | `precmd` hook prints indicator above the prompt             |
+| **Plain zsh**        | Prepends `$(inline_cli_prompt_info)` to `PROMPT`            |
+| **oh-my-zsh**        | Same as plain zsh                                           |
+| **bash**             | Prepends `$(_inline_cli_indicator)` to `PS1`                |
+
+Set `INLINE_CLI_NO_PROMPT=1` to disable auto-injection. The `inline_cli_prompt_info` function is still available for manual use.
+
+## Cross-compilation
+
+Build release binaries for all supported platforms:
+
+```sh
+make release
 ```
 
-For other prompt themes, use the `inline_cli_prompt_info` function:
-
-```zsh
-PROMPT='$(inline_cli_prompt_info)'$PROMPT
-```
+Produces `{linux,darwin}_{amd64,arm64}` tarballs in `./build/` with SHA-256 checksums.
 
 ## Architecture
 
@@ -240,7 +257,7 @@ inline-cli/
 │   ├── ipc/              # IPC protocol (NDJSON over Unix socket)
 │   ├── render/           # Terminal renderer + markdown (glamour)
 │   └── session/          # Directory-scoped session manager
-├── shell/                # Shell integration scripts
+├── shell/                # Shell integration scripts (zsh, bash)
 └── scripts/              # Install/uninstall scripts
 ```
 
@@ -250,7 +267,7 @@ Single Go binary, ~14MB. No runtime dependencies.
 
 - **Go 1.22+** (build only)
 - **macOS** or **Linux**
-- **zsh** (bash and fish support planned)
+- **zsh** or **bash**
 - One of: [Anthropic API key](https://console.anthropic.com/), `claude` CLI installed, or ACP endpoint
 
 ## Uninstall
@@ -260,7 +277,7 @@ inline-cli daemon stop
 rm "$(which inline-cli)"
 ```
 
-Remove the `# >>> inline-cli >>>` block from your `.zshrc`.
+Remove the `# >>> inline-cli >>>` block from your `.zshrc` or `.bashrc`.
 
 ## License
 

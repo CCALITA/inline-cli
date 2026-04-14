@@ -22,6 +22,9 @@ type Config struct {
 	// CLI backend settings
 	CLIPath string `toml:"cli_path"` // Path to claude binary (default: auto-detect)
 
+	// Gemini backend settings
+	GeminiPath string `toml:"gemini_path"` // Path to gemini binary (default: auto-detect)
+
 	// General settings
 	SocketPath            string `toml:"socket_path"`
 	PIDFile               string `toml:"pid_file"`
@@ -84,6 +87,9 @@ func Load() (Config, error) {
 	}
 	if v := os.Getenv("INLINE_CLI_CLI_PATH"); v != "" {
 		cfg.CLIPath = v
+	}
+	if v := os.Getenv("INLINE_CLI_GEMINI_PATH"); v != "" {
+		cfg.GeminiPath = v
 	}
 	if v := os.Getenv("INLINE_CLI_MAX_IDLE"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {

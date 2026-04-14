@@ -95,22 +95,8 @@ func TestOpenCodeBackend_Query_SingleMessage(t *testing.T) {
 }
 
 func TestOpenCodeBackend_Query_WithHistory(t *testing.T) {
-	// Fake script that prints all arguments so we can verify what was passed.
-	// We use printf "%s" "$@" to concatenate all args, which lets us inspect
-	// the -p <prompt> content for history.
-	script := writeFakeScript(t, `
-# Print the prompt argument (arg after -p).
-while [ $# -gt 0 ]; do
-  case "$1" in
-    -p)
-      shift
-      printf "%s" "$1"
-      exit 0
-      ;;
-  esac
-  shift
-done
-`)
+	// Fake script that prints the second arg (the prompt in `opencode run <prompt>`).
+	script := writeFakeScript(t, `printf "%s" "$2"`)
 
 	b := &OpenCodeBackend{binaryPath: script}
 

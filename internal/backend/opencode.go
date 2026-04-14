@@ -8,7 +8,7 @@ import (
 )
 
 // OpenCodeBackend uses the `opencode` CLI tool as the backend.
-// It execs `opencode -p <prompt>` and streams stdout.
+// It execs `opencode run <message>` and streams stdout.
 type OpenCodeBackend struct {
 	binaryPath string
 }
@@ -55,7 +55,12 @@ func (b *OpenCodeBackend) Query(messages []Message, model string, onChunk func(t
 		prompt = historyCtx + prompt
 	}
 
-	args := []string{"-p", prompt, "--output-format", "text", "--quiet"}
+	// opencode uses `opencode run <message>` for non-interactive mode.
+	// --format json gives structured events but "default" streams text to stdout.
+	args := []string{"run", prompt}
+	if model != "" {
+		args = append(args, "--model", model)
+	}
 
 	cmd := exec.Command(b.binaryPath, args...)
 

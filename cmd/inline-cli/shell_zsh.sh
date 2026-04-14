@@ -74,6 +74,13 @@ inline_cli_prompt_info() {
   fi
 }
 
+# Auto-inject indicator into the prompt unless opted out.
+# Set INLINE_CLI_NO_PROMPT=1 to disable, or use the p10k segment above.
+if [[ -z "$INLINE_CLI_NO_PROMPT" ]]; then
+  setopt PROMPT_SUBST 2>/dev/null
+  PROMPT='$(inline_cli_prompt_info)'"${PROMPT}"
+fi
+
 # ── Auto-start daemon ─────────────────────────────────────────────────
 
 if [[ ! -S "${INLINE_CLI_SOCKET:-/tmp/inline-cli-$(id -u).sock}" ]]; then

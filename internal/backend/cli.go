@@ -39,37 +39,15 @@ func (b *CLIBackend) Query(messages []Message, model string, onChunk func(text s
 		return "", err
 	}
 
-	// Build the prompt: use the last user message as the primary prompt.
-	// Pass conversation history as context via --system-prompt.
-	var prompt string
-	var history []string
-
-	for i, m := range messages {
-		if i == len(messages)-1 && m.Role == "user" {
-			prompt = m.Content
-		} else {
-			prefix := "User"
-			if m.Role == "assistant" {
-				prefix = "Assistant"
-			}
-			history = append(history, fmt.Sprintf("%s: %s", prefix, m.Content))
-		}
-	}
-
+	prompt, history := extractPromptAndHistory(messages)
 	if prompt == "" {
 		return "", fmt.Errorf("no user message found")
 	}
 
 	args := []string{"-p", prompt, "--output-format", "text"}
 
-	// Don't pass --model to the CLI — let it use its own default.
-	// The CLI has its own model configuration and may not support
-	// the same models as the direct API.
-
-	// Pass conversation history as system prompt for context.
 	if len(history) > 0 {
-		systemCtx := "Previous conversation:\n" + strings.Join(history, "\n")
-		args = append(args, "--system-prompt", systemCtx)
+		args = append(args, "--system-prompt", formatHistory(history))
 	}
 
 	cmd := exec.Command(binaryPath, args...)

@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/CCALITA/inline-cli/internal/config"
-	"github.com/CCALITA/inline-cli/internal/daemon"
 )
 
 func newSetupCmd() *cobra.Command {
@@ -28,15 +27,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	for i, b := range backends {
-		status := ""
-		if b.Binary != "" {
-			if b.isInstalled() {
-				status = "  \033[32m✓ installed\033[0m"
-			} else {
-				status = "  \033[31m✗ not found\033[0m"
-			}
-		}
-		fmt.Printf("  %d) %-10s — %s%s\n", i+1, b.Name, b.Desc, status)
+		fmt.Printf("  %d) %-10s — %s%s\n", i+1, b.Name, b.Desc, b.installStatus())
 	}
 
 	fmt.Println()
@@ -60,7 +51,6 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		break
 	}
 
-	// If API backend, prompt for API key.
 	if chosen.Name == "api" {
 		existing := os.Getenv("ANTHROPIC_API_KEY")
 		if existing == "" {
@@ -82,32 +72,19 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Warn about env var override.
 	if v := os.Getenv("INLINE_CLI_BACKEND"); v != "" && v != chosen.Name {
 		fmt.Println()
 		fmt.Printf("\033[33mWarning: INLINE_CLI_BACKEND=%s is set and will override this config.\033[0m\n", v)
 		fmt.Println("Run: unset INLINE_CLI_BACKEND")
 	}
 
-	// Save config.
 	if err := config.SaveBackend(chosen.Name); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
 	fmt.Println()
 	fmt.Printf("\033[32m✓\033[0m Backend set to %q\n", chosen.Name)
-
-	// Restart daemon if running.
-	cfg, err := config.Load()
-	if err != nil {
-		return nil // non-fatal
-	}
-
-	d := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
-	if d.IsRunning() {
-		d.Stop()
-		fmt.Println("\033[32m✓\033[0m Daemon restarted")
-	}
+	restartDaemonIfRunning()
 
 	fmt.Println()
 	fmt.Println("You're all set! Type something and press Ctrl+J (or Shift+Enter).")

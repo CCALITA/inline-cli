@@ -39,32 +39,13 @@ func (b *GeminiBackend) Query(messages []Message, model string, onChunk func(tex
 		return "", err
 	}
 
-	// Build the prompt: use the last user message as the primary prompt.
-	// Prepend conversation history as context directly in the prompt.
-	var prompt string
-	var history []string
-
-	for i, m := range messages {
-		if i == len(messages)-1 && m.Role == "user" {
-			prompt = m.Content
-		} else {
-			prefix := "User"
-			if m.Role == "assistant" {
-				prefix = "Assistant"
-			}
-			history = append(history, fmt.Sprintf("%s: %s", prefix, m.Content))
-		}
-	}
-
+	prompt, history := extractPromptAndHistory(messages)
 	if prompt == "" {
 		return "", fmt.Errorf("no user message found")
 	}
 
-	// If there is conversation history, prepend it to the prompt since the
-	// gemini CLI does not have a dedicated system-prompt flag.
 	if len(history) > 0 {
-		historyCtx := "Previous conversation:\n" + strings.Join(history, "\n") + "\n\n"
-		prompt = historyCtx + prompt
+		prompt = formatHistory(history) + "\n\n" + prompt
 	}
 
 	// gemini CLI supports -p for non-interactive mode and -o for output format.

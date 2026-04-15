@@ -111,32 +111,23 @@ func configFilePath() string {
 	return filepath.Join(homeDir, ".inline-cli", "config.toml")
 }
 
-// ConfigFilePath returns the path to the config file.
-func ConfigFilePath() string {
-	return configFilePath()
-}
-
 // SaveBackend updates the backend field in the config file, preserving other settings.
 // Creates the config directory and file if they don't exist.
 func SaveBackend(backend string) error {
 	path := configFilePath()
 
-	// Ensure directory exists.
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Load existing config to preserve other fields.
 	cfg := DefaultConfig()
-	if _, err := os.Stat(path); err == nil {
-		if _, err := toml.DecodeFile(path, &cfg); err != nil {
-			return fmt.Errorf("failed to read existing config: %w", err)
-		}
+	if _, err := toml.DecodeFile(path, &cfg); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to read existing config: %w", err)
 	}
 
 	cfg.Backend = backend
 
-	f, err := os.Create(path)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}

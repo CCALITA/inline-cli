@@ -43,32 +43,13 @@ type openCodeEvent struct {
 }
 
 func (b *OpenCodeBackend) Query(messages []Message, model string, onChunk func(text string)) (string, error) {
-	// Build the prompt: use the last user message as the primary prompt.
-	// Pass conversation history as context in the prompt itself,
-	// since opencode does not support a --system-prompt flag.
-	var prompt string
-	var history []string
-
-	for i, m := range messages {
-		if i == len(messages)-1 && m.Role == "user" {
-			prompt = m.Content
-		} else {
-			prefix := "User"
-			if m.Role == "assistant" {
-				prefix = "Assistant"
-			}
-			history = append(history, fmt.Sprintf("%s: %s", prefix, m.Content))
-		}
-	}
-
+	prompt, history := extractPromptAndHistory(messages)
 	if prompt == "" {
 		return "", fmt.Errorf("no user message found")
 	}
 
-	// Prepend conversation history to the prompt for context.
 	if len(history) > 0 {
-		historyCtx := "Previous conversation:\n" + strings.Join(history, "\n") + "\n\nCurrent request:\n"
-		prompt = historyCtx + prompt
+		prompt = formatHistory(history) + "\n\nCurrent request:\n" + prompt
 	}
 
 	// opencode uses `opencode run --format json <message>` for non-interactive mode.

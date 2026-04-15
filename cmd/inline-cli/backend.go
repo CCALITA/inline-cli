@@ -24,25 +24,56 @@ var backends = []backendInfo{
 	{Name: "claude", Desc: "Claude CLI", Binary: "claude"},
 	{Name: "gemini", Desc: "Gemini CLI", Binary: "gemini"},
 	{Name: "opencode", Desc: "OpenCode CLI", Binary: "opencode"},
-	{Name: "codex", Desc: "Codex CLI", Binary: "codex"},
 }
 
-// isInstalled checks if a CLI binary is available in PATH.
 func (b backendInfo) isInstalled() bool {
 	if b.Binary == "" {
-		return true // API backend is always "available"
+		return true
 	}
 	_, err := exec.LookPath(b.Binary)
 	return err == nil
 }
 
-// validBackendNames returns the list of valid backend name strings.
+func (b backendInfo) installStatus() string {
+	if b.Binary == "" {
+		return ""
+	}
+	if b.isInstalled() {
+		return "  \033[32m✓ installed\033[0m"
+	}
+	return "  \033[31m✗ not found\033[0m"
+}
+
+func findBackend(name string) (backendInfo, bool) {
+	for _, b := range backends {
+		if b.Name == name {
+			return b, true
+		}
+	}
+	return backendInfo{}, false
+}
+
 func validBackendNames() []string {
 	names := make([]string, len(backends))
 	for i, b := range backends {
 		names[i] = b.Name
 	}
 	return names
+}
+
+func restartDaemonIfRunning() {
+	cfg, err := config.Load()
+	if err != nil {
+		return
+	}
+	d := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
+	if d.IsRunning() {
+		if err := d.Stop(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop daemon: %v\n", err)
+		} else {
+			fmt.Println("Daemon stopped. Next query will use the new backend.")
+		}
+	}
 }
 
 func newBackendCmd() *cobra.Command {
@@ -96,28 +127,14 @@ func runBackendList(cmd *cobra.Command, args []string) error {
 
 	for _, b := range backends {
 		marker := "  "
-		if b.Name == active {
-			marker = "* "
-		}
-
-		status := ""
-		if b.Binary != "" {
-			if b.isInstalled() {
-				status = "  \033[32m✓ installed\033[0m"
-			} else {
-				status = "  \033[31m✗ not found\033[0m"
-			}
-		}
-
 		activeSuffix := ""
 		if b.Name == active {
+			marker = "* "
 			activeSuffix = "  (active)"
 		}
-
-		fmt.Printf("%s%-10s — %s%s%s\n", marker, b.Name, b.Desc, status, activeSuffix)
+		fmt.Printf("%s%-10s — %s%s%s\n", marker, b.Name, b.Desc, b.installStatus(), activeSuffix)
 	}
 
-	// Warn about env var override.
 	if v := os.Getenv("INLINE_CLI_BACKEND"); v != "" {
 		fmt.Printf("\n\033[33mNote: INLINE_CLI_BACKEND=%s is set and overrides the config file.\033[0m\n", v)
 	}
@@ -143,45 +160,21 @@ func runBackendShow(cmd *cobra.Command, args []string) error {
 func runBackendSet(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
-	// Validate.
-	valid := false
-	for _, b := range backends {
-		if b.Name == name {
-			valid = true
-			break
-		}
-	}
-	if !valid {
+	if _, ok := findBackend(name); !ok {
 		return fmt.Errorf("unknown backend %q (supported: %s)", name, strings.Join(validBackendNames(), ", "))
 	}
 
-	// Warn about env var override.
 	if v := os.Getenv("INLINE_CLI_BACKEND"); v != "" {
 		fmt.Fprintf(os.Stderr, "\033[33mWarning: INLINE_CLI_BACKEND=%s is set and will override this config.\033[0m\n", v)
 		fmt.Fprintf(os.Stderr, "Run: unset INLINE_CLI_BACKEND\n\n")
 	}
 
-	// Write config.
 	if err := config.SaveBackend(name); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
 	fmt.Printf("Backend set to %q\n", name)
-
-	// Auto-restart daemon.
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-
-	d := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
-	if d.IsRunning() {
-		if err := d.Stop(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to stop daemon: %v\n", err)
-		} else {
-			fmt.Println("Daemon restarted. Next query will use the new backend.")
-		}
-	}
+	restartDaemonIfRunning()
 
 	return nil
 }

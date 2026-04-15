@@ -88,7 +88,7 @@ func (b *GeminiBackend) Query(messages []Message, model string, onChunk func(tex
 		if fullResponse.Len() > 0 {
 			return fullResponse.String(), nil
 		}
-		errMsg := firstLine(stderrBuf.String())
+		errMsg := extractError(stderrBuf.String())
 		if errMsg != "" {
 			return "", fmt.Errorf("gemini CLI error: %s", errMsg)
 		}
@@ -98,13 +98,34 @@ func (b *GeminiBackend) Query(messages []Message, model string, onChunk func(tex
 	return fullResponse.String(), nil
 }
 
-// firstLine returns the first non-empty line from s, trimmed.
-func firstLine(s string) string {
-	for _, line := range strings.Split(s, "\n") {
+// extractError returns the most useful error message from gemini CLI stderr.
+// It skips known non-fatal warnings (e.g. skill conflicts) and looks for
+// actionable error messages.
+func extractError(stderr string) string {
+	var fallback string
+	for _, line := range strings.Split(stderr, "\n") {
 		line = strings.TrimSpace(line)
-		if line != "" {
+		if line == "" {
+			continue
+		}
+		// Skip non-fatal warnings.
+		if strings.HasPrefix(line, "Skill conflict") {
+			continue
+		}
+		// Skip stack traces.
+		if strings.HasPrefix(line, "at ") {
+			continue
+		}
+		if fallback == "" {
+			fallback = line
+		}
+		// Prefer lines that mention specific API errors.
+		if strings.Contains(line, "Error when talking to") ||
+			strings.Contains(line, "INVALID_ARGUMENT") ||
+			strings.Contains(line, "PERMISSION_DENIED") ||
+			strings.Contains(line, "UNAUTHENTICATED") {
 			return line
 		}
 	}
-	return ""
+	return fallback
 }

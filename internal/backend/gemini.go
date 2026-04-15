@@ -80,6 +80,10 @@ func (b *GeminiBackend) Query(messages []Message, model string, onChunk func(tex
 		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
+	// Capture stderr so we can surface the actual error message from gemini.
+	var stderrBuf strings.Builder
+	cmd.Stderr = &stderrBuf
+
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("failed to start gemini CLI: %w", err)
 	}
@@ -97,12 +101,30 @@ func (b *GeminiBackend) Query(messages []Message, model string, onChunk func(tex
 	}
 
 	if err := cmd.Wait(); err != nil {
-		// If we already got some output, return it with the error.
+		// Extract the first meaningful line from stderr for the error message.
+		errMsg := firstLine(stderrBuf.String())
 		if fullResponse.Len() > 0 {
+			if errMsg != "" {
+				return fullResponse.String(), fmt.Errorf("gemini CLI error: %s", errMsg)
+			}
 			return fullResponse.String(), fmt.Errorf("gemini CLI exited with error: %w", err)
+		}
+		if errMsg != "" {
+			return "", fmt.Errorf("gemini CLI error: %s", errMsg)
 		}
 		return "", fmt.Errorf("gemini CLI failed: %w", err)
 	}
 
 	return fullResponse.String(), nil
+}
+
+// firstLine returns the first non-empty line from s, trimmed.
+func firstLine(s string) string {
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			return line
+		}
+	}
+	return ""
 }

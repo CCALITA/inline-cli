@@ -142,6 +142,21 @@ printf 'ok'
 }
 
 func TestGeminiBackend_Query_BinaryFails(t *testing.T) {
+	script := writeFakeGeminiScript(t, `echo "API error: invalid request" >&2; exit 1`)
+	b := &GeminiBackend{configuredPath: script}
+
+	messages := []Message{{Role: "user", Content: "hello"}}
+
+	_, err := b.Query(messages, "", nil)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "API error: invalid request") {
+		t.Errorf("error = %q, want stderr content surfaced", err.Error())
+	}
+}
+
+func TestGeminiBackend_Query_BinaryFailsNoStderr(t *testing.T) {
 	script := writeFakeGeminiScript(t, `exit 1`)
 	b := &GeminiBackend{configuredPath: script}
 
@@ -159,6 +174,7 @@ func TestGeminiBackend_Query_BinaryFails(t *testing.T) {
 func TestGeminiBackend_Query_PartialOutputThenFail(t *testing.T) {
 	script := writeFakeGeminiScript(t, `
 printf "partial"
+echo "something went wrong" >&2
 exit 1
 `)
 	b := &GeminiBackend{configuredPath: script}
@@ -173,8 +189,8 @@ exit 1
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "gemini CLI exited with error") {
-		t.Errorf("error = %q, want 'gemini CLI exited with error'", err.Error())
+	if !strings.Contains(err.Error(), "something went wrong") {
+		t.Errorf("error = %q, want stderr content surfaced", err.Error())
 	}
 	if result != "partial" {
 		t.Errorf("result = %q, want %q", result, "partial")

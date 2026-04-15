@@ -19,6 +19,7 @@
 
 No context switching. No new window. The answer streams in below your prompt and you keep working.
 Just press shift with enter to trigger claude response.
+
 ## Install
 
 ```sh
@@ -29,9 +30,9 @@ Or build from source:
 
 ```sh
 git clone https://github.com/CCALITA/inline-cli.git
-cd inline-clig
-make build
-# Binary is at ./build/inline-cli
+cd inline-cli
+make build          # Binary is at ./build/inline-cli
+make install        # Copies to $GOPATH/bin (or ~/go/bin)
 ```
 
 Then add to your shell config:
@@ -44,10 +45,10 @@ eval "$(inline-cli init zsh)"
 eval "$(inline-cli init bash)"
 ```
 
-Set your API key:
+Run the setup wizard to choose a backend:
 
 ```sh
-export ANTHROPIC_API_KEY=sk-ant-...
+inline-cli setup
 ```
 
 Restart your shell. Done.
@@ -58,15 +59,19 @@ Restart your shell. Done.
  ┌─────────────────┐     Unix socket     ┌──────────────┐     HTTPS/SSE     ┌───────────┐
  │  shell widget    │ ──────────────────> │  daemon      │ ─────────────────>│ Claude API│
  │  captures buffer │ <── NDJSON stream── │  per-dir     │ <── streaming ──  │           │
- │  renders output  │                     │  sessions    │                   │           │
- └─────────────────┘                     └──────────────┘                   └───────────┘
+ │  renders output  │                     │  sessions    │                   └───────────┘
+ └─────────────────┘                     │              │        or
+                                          │              │ ───> claude CLI
+                                          │              │ ───> gemini CLI
+                                          │              │ ───> opencode CLI
+                                          └──────────────┘
 ```
 
 **Three pieces:**
 
 1. **Shell integration** — A zsh ZLE widget or bash readline binding captures your command-line buffer on <kbd>Shift</kbd>+<kbd>Enter</kbd> (or <kbd>Ctrl</kbd>+<kbd>J</kbd>) and pipes it to the CLI.
 2. **Background daemon** — A long-lived Go process manages conversation sessions over a Unix domain socket. Sub-millisecond IPC. No cold start per query.
-3. **Pluggable backend** — Talks to Claude via direct API, the `claude` CLI, or ACP. Streams responses as markdown to your terminal.
+3. **Pluggable backend** — Talks to Claude via direct API, the `claude` CLI, Gemini CLI, or OpenCode CLI. Streams responses as markdown to your terminal.
 
 ### Directory-scoped sessions
 
@@ -104,6 +109,12 @@ shift + enter
 # Check what's running
 inline-cli status
 
+# Manage backends
+inline-cli setup              # Interactive first-time setup
+inline-cli backend list       # List backends with install status
+inline-cli backend show       # Show current backend
+inline-cli backend set gemini # Switch backend (auto-restarts daemon)
+
 # Manage the daemon
 inline-cli daemon start
 inline-cli daemon stop
@@ -114,7 +125,7 @@ inline-cli daemon stop
 Config lives at `~/.inline-cli/config.toml`. All fields are optional — defaults are sensible.
 
 ```toml
-# Backend: "api" (default), "cli", or "acp"
+# Backend: "api" (default), "claude", "gemini", "opencode"
 backend = "api"
 
 # API backend settings
@@ -122,8 +133,10 @@ api_key = "sk-ant-..."                    # or set ANTHROPIC_API_KEY env var
 model = "claude-sonnet-4-20250514"        # default model
 api_base_url = ""                         # custom API endpoint (proxy, gateway)
 
-# CLI backend settings (uses `claude` command)
-cli_path = ""                             # auto-detected from PATH if empty
+# CLI backend paths (auto-detected from PATH if empty)
+cli_path = ""
+gemini_path = ""
+opencode_path = ""
 
 # Session settings
 max_session_idle_minutes = 30
@@ -132,34 +145,40 @@ max_messages = 50
 
 ### Backends
 
-| Backend             | Config                    | What it does                                                                       |
-| ------------------- | ------------------------- | ---------------------------------------------------------------------------------- |
-| **`api`** (default) | Needs `ANTHROPIC_API_KEY` | Direct HTTPS to Anthropic Messages API with SSE streaming                          |
-| **`cli`**           | Needs `claude` in PATH    | Execs `claude -p <prompt>` and streams stdout. Uses your existing claude CLI auth. |
-| **`acp`**           | —                         | Agent Communication Protocol (planned)                                             |
+| Backend                | Config                    | What it does                                                                       |
+| ---------------------- | ------------------------- | ---------------------------------------------------------------------------------- |
+| **`api`** (default)    | Needs `ANTHROPIC_API_KEY` | Direct HTTPS to Anthropic Messages API with SSE streaming                          |
+| **`claude`**           | Needs `claude` in PATH    | Execs `claude -p <prompt>` and streams stdout. Uses your existing Claude CLI auth. |
+| **`gemini`**           | Needs `gemini` in PATH    | Execs `gemini -p <prompt> -o text` and streams stdout. Uses Gemini CLI auth.       |
+| **`opencode`**         | Needs `opencode` in PATH  | Execs `opencode run --format json` and parses the JSON event stream.               |
 
-Switch backends via config file or env var:
+Switch backends via the CLI or config file:
 
 ```sh
-# Use claude CLI instead of direct API
-export INLINE_CLI_BACKEND=cli
+# Interactive setup (detects installed CLIs)
+inline-cli setup
 
-# Or in config.toml
-backend = "cli"
+# Direct switch
+inline-cli backend set gemini
+
+# Or via env var (overrides config file)
+export INLINE_CLI_BACKEND=claude
 ```
 
 ### Environment variables
 
-| Variable                  | Purpose                                |
-| ------------------------- | -------------------------------------- |
-| `ANTHROPIC_API_KEY`       | API key (required for `api` backend)   |
-| `INLINE_CLI_BACKEND`      | Backend selection: `api`, `cli`, `acp` |
-| `INLINE_CLI_MODEL`        | Override model                         |
-| `INLINE_CLI_SOCKET`       | Custom socket path                     |
-| `INLINE_CLI_API_BASE_URL` | Custom API endpoint                    |
-| `INLINE_CLI_CLI_PATH`     | Path to `claude` binary                |
-| `INLINE_CLI_MAX_IDLE`     | Session idle timeout (minutes)         |
-| `INLINE_CLI_NO_PROMPT`    | Set to `1` to disable prompt indicator |
+| Variable                    | Purpose                                          |
+| --------------------------- | ------------------------------------------------ |
+| `ANTHROPIC_API_KEY`         | API key (required for `api` backend)             |
+| `INLINE_CLI_BACKEND`        | Backend override: `api`, `claude`, `gemini`, `opencode` |
+| `INLINE_CLI_MODEL`          | Override model                                   |
+| `INLINE_CLI_SOCKET`         | Custom socket path                               |
+| `INLINE_CLI_API_BASE_URL`   | Custom API endpoint                              |
+| `INLINE_CLI_CLI_PATH`       | Path to `claude` binary                          |
+| `INLINE_CLI_GEMINI_PATH`    | Path to `gemini` binary                          |
+| `INLINE_CLI_OPENCODE_PATH`  | Path to `opencode` binary                        |
+| `INLINE_CLI_MAX_IDLE`       | Session idle timeout (minutes)                   |
+| `INLINE_CLI_NO_PROMPT`      | Set to `1` to disable prompt indicator           |
 
 Precedence: env vars > config file > defaults.
 
@@ -236,7 +255,7 @@ Produces `{linux,darwin}_{amd64,arm64}` tarballs in `./build/` with SHA-256 chec
 inline-cli/
 ├── cmd/inline-cli/       # CLI entry point + embedded shell scripts
 ├── internal/
-│   ├── backend/          # Backend interface + implementations (API, CLI, ACP)
+│   ├── backend/          # Backend interface + implementations (API, Claude CLI, Gemini CLI, OpenCode CLI)
 │   ├── claude/           # Claude API client + SSE streaming parser
 │   ├── config/           # Config loading (TOML + env vars)
 │   ├── daemon/           # Daemon lifecycle + Unix socket server
@@ -254,7 +273,7 @@ Single Go binary, ~14MB. No runtime dependencies.
 - **Go 1.22+** (build only)
 - **macOS** or **Linux**
 - **zsh** or **bash**
-- One of: [Anthropic API key](https://console.anthropic.com/), `claude` CLI installed, or ACP endpoint
+- One of: [Anthropic API key](https://console.anthropic.com/), `claude` CLI, `gemini` CLI, or `opencode` CLI
 
 ## Uninstall
 

@@ -64,7 +64,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 			if key != "" {
 				fmt.Println()
 				fmt.Println("Add this to your shell profile:")
-				fmt.Printf("  export ANTHROPIC_API_KEY=%s\n", key)
+				fmt.Printf("  export ANTHROPIC_API_KEY='%s'\n", strings.ReplaceAll(key, "'", "'\\''"))
 			}
 		} else {
 			fmt.Println()

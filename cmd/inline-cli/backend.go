@@ -64,6 +64,7 @@ func validBackendNames() []string {
 func restartDaemonIfRunning() {
 	cfg, err := config.Load()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not reload config: %v\n", err)
 		return
 	}
 	d := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)

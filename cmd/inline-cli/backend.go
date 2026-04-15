@@ -135,10 +135,6 @@ func runBackendList(cmd *cobra.Command, args []string) error {
 		fmt.Printf("%s%-10s — %s%s%s\n", marker, b.Name, b.Desc, b.installStatus(), activeSuffix)
 	}
 
-	if v := os.Getenv("INLINE_CLI_BACKEND"); v != "" {
-		fmt.Printf("\n\033[33mNote: INLINE_CLI_BACKEND=%s is set and overrides the config file.\033[0m\n", v)
-	}
-
 	return nil
 }
 
@@ -149,11 +145,6 @@ func runBackendShow(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println(cfg.BackendName())
-
-	if v := os.Getenv("INLINE_CLI_BACKEND"); v != "" {
-		fmt.Fprintf(os.Stderr, "Note: overridden by INLINE_CLI_BACKEND=%s\n", v)
-	}
-
 	return nil
 }
 
@@ -162,11 +153,6 @@ func runBackendSet(cmd *cobra.Command, args []string) error {
 
 	if _, ok := findBackend(name); !ok {
 		return fmt.Errorf("unknown backend %q (supported: %s)", name, strings.Join(validBackendNames(), ", "))
-	}
-
-	if v := os.Getenv("INLINE_CLI_BACKEND"); v != "" {
-		fmt.Fprintf(os.Stderr, "\033[33mWarning: INLINE_CLI_BACKEND=%s is set and will override this config.\033[0m\n", v)
-		fmt.Fprintf(os.Stderr, "Run: unset INLINE_CLI_BACKEND\n\n")
 	}
 
 	if err := config.SaveBackend(name); err != nil {

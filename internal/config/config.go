@@ -76,9 +76,6 @@ func Load() (Config, error) {
 	if v := os.Getenv("ANTHROPIC_API_KEY"); v != "" {
 		cfg.APIKey = v
 	}
-	if v := os.Getenv("INLINE_CLI_BACKEND"); v != "" {
-		cfg.Backend = v
-	}
 	if v := os.Getenv("INLINE_CLI_MODEL"); v != "" {
 		cfg.Model = v
 	}

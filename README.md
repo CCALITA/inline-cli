@@ -160,9 +160,6 @@ inline-cli setup
 
 # Direct switch
 inline-cli backend set gemini
-
-# Or via env var (overrides config file)
-export INLINE_CLI_BACKEND=claude
 ```
 
 ### Environment variables
@@ -170,7 +167,6 @@ export INLINE_CLI_BACKEND=claude
 | Variable                    | Purpose                                          |
 | --------------------------- | ------------------------------------------------ |
 | `ANTHROPIC_API_KEY`         | API key (required for `api` backend)             |
-| `INLINE_CLI_BACKEND`        | Backend override: `api`, `claude`, `gemini`, `opencode` |
 | `INLINE_CLI_MODEL`          | Override model                                   |
 | `INLINE_CLI_SOCKET`         | Custom socket path                               |
 | `INLINE_CLI_API_BASE_URL`   | Custom API endpoint                              |

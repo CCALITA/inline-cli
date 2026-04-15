@@ -72,12 +72,6 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if v := os.Getenv("INLINE_CLI_BACKEND"); v != "" && v != chosen.Name {
-		fmt.Println()
-		fmt.Printf("\033[33mWarning: INLINE_CLI_BACKEND=%s is set and will override this config.\033[0m\n", v)
-		fmt.Println("Run: unset INLINE_CLI_BACKEND")
-	}
-
 	if err := config.SaveBackend(chosen.Name); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}

@@ -44,12 +44,14 @@ func createBackend(cfg config.Config) (backend.Backend, error) {
 	switch cfg.Backend {
 	case "cli":
 		return backend.NewCLIBackend(cfg.CLIPath)
+	case "opencode":
+		return backend.NewOpenCodeBackend(cfg.OpenCodePath)
 	case "acp":
 		return backend.NewACPBackend()
 	case "api", "":
 		return backend.NewAPIBackend(cfg.APIKey, cfg.APIBaseURL)
 	default:
-		return nil, fmt.Errorf("unknown backend: %q (supported: api, cli, acp)", cfg.Backend)
+		return nil, fmt.Errorf("unknown backend: %q (supported: api, cli, opencode, acp)", cfg.Backend)
 	}
 }
 

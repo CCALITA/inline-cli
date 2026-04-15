@@ -11,7 +11,7 @@ import (
 
 // Config holds all configuration for inline-cli.
 type Config struct {
-	// Backend selection: "api" (default), "cli", "acp"
+	// Backend selection: "api" (default), "claude", "gemini", "opencode"
 	Backend string `toml:"backend"`
 
 	// API backend settings
@@ -76,9 +76,6 @@ func Load() (Config, error) {
 	if v := os.Getenv("ANTHROPIC_API_KEY"); v != "" {
 		cfg.APIKey = v
 	}
-	if v := os.Getenv("INLINE_CLI_BACKEND"); v != "" {
-		cfg.Backend = v
-	}
 	if v := os.Getenv("INLINE_CLI_MODEL"); v != "" {
 		cfg.Model = v
 	}
@@ -109,4 +106,56 @@ func Load() (Config, error) {
 func configFilePath() string {
 	homeDir, _ := os.UserHomeDir()
 	return filepath.Join(homeDir, ".inline-cli", "config.toml")
+}
+
+// SaveBackend updates the backend field in the config file, preserving other settings.
+// Creates the config directory and file if they don't exist.
+// Uses atomic write (temp file + rename) to prevent corruption.
+func SaveBackend(backend string) error {
+	path := configFilePath()
+	dir := filepath.Dir(path)
+
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	cfg := DefaultConfig()
+	if _, err := os.Stat(path); err == nil {
+		if _, err := toml.DecodeFile(path, &cfg); err != nil {
+			return fmt.Errorf("failed to read existing config: %w", err)
+		}
+	}
+
+	cfg.Backend = backend
+
+	// Write to a temp file in the same directory, then rename for atomicity.
+	tmp, err := os.CreateTemp(dir, "config-*.toml.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+
+	if err := os.Chmod(tmpPath, 0600); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to set config file permissions: %w", err)
+	}
+
+	if err := toml.NewEncoder(tmp).Encode(cfg); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to encode config: %w", err)
+	}
+
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to save config file: %w", err)
+	}
+
+	return nil
 }

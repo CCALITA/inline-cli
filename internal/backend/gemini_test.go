@@ -156,6 +156,64 @@ func TestGeminiBackend_Query_BinaryFails(t *testing.T) {
 	}
 }
 
+func TestExtractError(t *testing.T) {
+	tests := []struct {
+		name   string
+		stderr string
+		want   string
+	}{
+		{
+			name:   "empty",
+			stderr: "",
+			want:   "",
+		},
+		{
+			name:   "skill conflict only",
+			stderr: "Skill conflict detected: foo vs bar\n",
+			want:   "",
+		},
+		{
+			name:   "skill conflict with real error",
+			stderr: "Skill conflict detected: foo vs bar\nError when talking to Gemini API: 400\n",
+			want:   "Error when talking to Gemini API: 400",
+		},
+		{
+			name:   "stack trace skipped",
+			stderr: "Something failed\nat /usr/lib/node.js:10:5\nat main.go:20\n",
+			want:   "Something failed",
+		},
+		{
+			name:   "prefers API error over fallback",
+			stderr: "some warning\nINVALID_ARGUMENT: bad field\n",
+			want:   "INVALID_ARGUMENT: bad field",
+		},
+		{
+			name:   "PERMISSION_DENIED",
+			stderr: "PERMISSION_DENIED: not authorized\n",
+			want:   "PERMISSION_DENIED: not authorized",
+		},
+		{
+			name:   "UNAUTHENTICATED",
+			stderr: "UNAUTHENTICATED: missing credentials\n",
+			want:   "UNAUTHENTICATED: missing credentials",
+		},
+		{
+			name:   "fallback to first non-skipped line",
+			stderr: "Skill conflict detected: x\nat foo.js:1\nactual problem here\n",
+			want:   "actual problem here",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractError(tt.stderr)
+			if got != tt.want {
+				t.Errorf("extractError() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGeminiBackend_Query_BinaryFailsNoStderr(t *testing.T) {
 	script := writeFakeGeminiScript(t, `exit 1`)
 	b := &GeminiBackend{configuredPath: script}
@@ -172,6 +230,8 @@ func TestGeminiBackend_Query_BinaryFailsNoStderr(t *testing.T) {
 }
 
 func TestGeminiBackend_Query_PartialOutputThenFail(t *testing.T) {
+	// When gemini produces output but exits non-zero (e.g. skill conflict
+	// warning), the response should be returned without an error.
 	script := writeFakeGeminiScript(t, `
 printf "partial"
 echo "something went wrong" >&2
@@ -186,11 +246,8 @@ exit 1
 		chunks = append(chunks, text)
 	})
 
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "something went wrong") {
-		t.Errorf("error = %q, want stderr content surfaced", err.Error())
+	if err != nil {
+		t.Fatalf("unexpected error: %v (should succeed when output exists)", err)
 	}
 	if result != "partial" {
 		t.Errorf("result = %q, want %q", result, "partial")

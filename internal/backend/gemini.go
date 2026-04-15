@@ -39,32 +39,13 @@ func (b *GeminiBackend) Query(messages []Message, model string, onChunk func(tex
 		return "", err
 	}
 
-	// Build the prompt: use the last user message as the primary prompt.
-	// Prepend conversation history as context directly in the prompt.
-	var prompt string
-	var history []string
-
-	for i, m := range messages {
-		if i == len(messages)-1 && m.Role == "user" {
-			prompt = m.Content
-		} else {
-			prefix := "User"
-			if m.Role == "assistant" {
-				prefix = "Assistant"
-			}
-			history = append(history, fmt.Sprintf("%s: %s", prefix, m.Content))
-		}
-	}
-
+	prompt, history := extractPromptAndHistory(messages)
 	if prompt == "" {
 		return "", fmt.Errorf("no user message found")
 	}
 
-	// If there is conversation history, prepend it to the prompt since the
-	// gemini CLI does not have a dedicated system-prompt flag.
 	if len(history) > 0 {
-		historyCtx := "Previous conversation:\n" + strings.Join(history, "\n") + "\n\n"
-		prompt = historyCtx + prompt
+		prompt = formatHistory(history) + "\n\n" + prompt
 	}
 
 	// gemini CLI supports -p for non-interactive mode and -o for output format.
@@ -101,14 +82,13 @@ func (b *GeminiBackend) Query(messages []Message, model string, onChunk func(tex
 	}
 
 	if err := cmd.Wait(); err != nil {
-		// Extract the first meaningful line from stderr for the error message.
-		errMsg := firstLine(stderrBuf.String())
+		// If we already streamed a response, treat non-zero exit as a warning
+		// (e.g. gemini prints skill conflict warnings to stderr but still
+		// produces valid output). Return the response without an error.
 		if fullResponse.Len() > 0 {
-			if errMsg != "" {
-				return fullResponse.String(), fmt.Errorf("gemini CLI error: %s", errMsg)
-			}
-			return fullResponse.String(), fmt.Errorf("gemini CLI exited with error: %w", err)
+			return fullResponse.String(), nil
 		}
+		errMsg := extractError(stderrBuf.String())
 		if errMsg != "" {
 			return "", fmt.Errorf("gemini CLI error: %s", errMsg)
 		}
@@ -118,13 +98,34 @@ func (b *GeminiBackend) Query(messages []Message, model string, onChunk func(tex
 	return fullResponse.String(), nil
 }
 
-// firstLine returns the first non-empty line from s, trimmed.
-func firstLine(s string) string {
-	for _, line := range strings.Split(s, "\n") {
+// extractError returns the most useful error message from gemini CLI stderr.
+// It skips known non-fatal warnings (e.g. skill conflicts) and looks for
+// actionable error messages.
+func extractError(stderr string) string {
+	var fallback string
+	for _, line := range strings.Split(stderr, "\n") {
 		line = strings.TrimSpace(line)
-		if line != "" {
+		if line == "" {
+			continue
+		}
+		// Skip non-fatal warnings.
+		if strings.HasPrefix(line, "Skill conflict") {
+			continue
+		}
+		// Skip stack traces.
+		if strings.HasPrefix(line, "at ") {
+			continue
+		}
+		if fallback == "" {
+			fallback = line
+		}
+		// Prefer lines that mention specific API errors.
+		if strings.Contains(line, "Error when talking to") ||
+			strings.Contains(line, "INVALID_ARGUMENT") ||
+			strings.Contains(line, "PERMISSION_DENIED") ||
+			strings.Contains(line, "UNAUTHENTICATED") {
 			return line
 		}
 	}
-	return ""
+	return fallback
 }

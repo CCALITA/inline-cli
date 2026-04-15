@@ -12,20 +12,24 @@ import (
 // It invokes `opencode run --format json <message>` and parses the
 // newline-delimited JSON event stream from stdout.
 type OpenCodeBackend struct {
-	binaryPath string
+	configuredPath string
 }
 
 // NewOpenCodeBackend creates a backend that delegates to the opencode CLI.
-// If binaryPath is empty, it looks for "opencode" in PATH.
+// If binaryPath is empty, it will look for "opencode" in PATH on each query.
 func NewOpenCodeBackend(binaryPath string) (*OpenCodeBackend, error) {
-	if binaryPath == "" {
-		path, err := exec.LookPath("opencode")
-		if err != nil {
-			return nil, fmt.Errorf("opencode CLI not found in PATH: %w", err)
-		}
-		binaryPath = path
+	return &OpenCodeBackend{configuredPath: binaryPath}, nil
+}
+
+func (b *OpenCodeBackend) resolveBinary() (string, error) {
+	if b.configuredPath != "" {
+		return b.configuredPath, nil
 	}
-	return &OpenCodeBackend{binaryPath: binaryPath}, nil
+	path, err := exec.LookPath("opencode")
+	if err != nil {
+		return "", fmt.Errorf("opencode CLI not found in PATH: %w", err)
+	}
+	return path, nil
 }
 
 // openCodeEvent represents a single JSON event from `opencode run --format json`.
@@ -43,32 +47,18 @@ type openCodeEvent struct {
 }
 
 func (b *OpenCodeBackend) Query(messages []Message, model string, onChunk func(text string)) (string, error) {
-	// Build the prompt: use the last user message as the primary prompt.
-	// Pass conversation history as context in the prompt itself,
-	// since opencode does not support a --system-prompt flag.
-	var prompt string
-	var history []string
-
-	for i, m := range messages {
-		if i == len(messages)-1 && m.Role == "user" {
-			prompt = m.Content
-		} else {
-			prefix := "User"
-			if m.Role == "assistant" {
-				prefix = "Assistant"
-			}
-			history = append(history, fmt.Sprintf("%s: %s", prefix, m.Content))
-		}
+	binaryPath, err := b.resolveBinary()
+	if err != nil {
+		return "", err
 	}
 
+	prompt, history := extractPromptAndHistory(messages)
 	if prompt == "" {
 		return "", fmt.Errorf("no user message found")
 	}
 
-	// Prepend conversation history to the prompt for context.
 	if len(history) > 0 {
-		historyCtx := "Previous conversation:\n" + strings.Join(history, "\n") + "\n\nCurrent request:\n"
-		prompt = historyCtx + prompt
+		prompt = formatHistory(history) + "\n\nCurrent request:\n" + prompt
 	}
 
 	// opencode uses `opencode run --format json <message>` for non-interactive mode.
@@ -79,7 +69,7 @@ func (b *OpenCodeBackend) Query(messages []Message, model string, onChunk func(t
 	// model config. Let opencode use its own configured default.
 	args := []string{"run", "--format", "json", prompt}
 
-	cmd := exec.Command(b.binaryPath, args...)
+	cmd := exec.Command(binaryPath, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

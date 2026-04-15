@@ -31,27 +31,23 @@ Or build from source:
 ```sh
 git clone https://github.com/CCALITA/inline-cli.git
 cd inline-cli
-make build          # Binary is at ./build/inline-cli
-make install        # Copies to $GOPATH/bin (or ~/go/bin)
+make build                                        # → ./build/inline-cli
+cp ./build/inline-cli ~/.local/bin/inline-cli     # or anywhere in your PATH
 ```
 
-Then add to your shell config:
+Then set up your shell and backend:
 
 ```sh
-# zsh (~/.zshrc)
-eval "$(inline-cli init zsh)"
+# 1. Add shell integration (pick one)
+echo 'eval "$(inline-cli init zsh)"'  >> ~/.zshrc    # zsh
+echo 'eval "$(inline-cli init bash)"' >> ~/.bashrc   # bash
 
-# bash (~/.bashrc)
-eval "$(inline-cli init bash)"
-```
-
-Run the setup wizard to choose a backend:
-
-```sh
+# 2. Choose a backend
 inline-cli setup
-```
 
-Restart your shell. Done.
+# 3. Restart your shell
+exec $SHELL
+```
 
 ## How it works
 
@@ -245,6 +241,16 @@ make release
 
 Produces `{linux,darwin}_{amd64,arm64}` tarballs in `./build/` with SHA-256 checksums.
 
+### Make targets
+
+| Target         | What it does                                        |
+| -------------- | --------------------------------------------------- |
+| `make build`   | Build binary → `./build/inline-cli`                 |
+| `make test`    | Run all tests with `-race -cover`                   |
+| `make lint`    | Run `go vet`                                        |
+| `make clean`   | Remove `./build/`                                   |
+| `make release` | Cross-compile + tarball + SHA-256 checksums          |
+
 ## Architecture
 
 ```
@@ -266,7 +272,7 @@ Single Go binary, ~14MB. No runtime dependencies.
 
 ## Requirements
 
-- **Go 1.22+** (build only)
+- **Go 1.26+** (build only)
 - **macOS** or **Linux**
 - **zsh** or **bash**
 - One of: [Anthropic API key](https://console.anthropic.com/), `claude` CLI, `gemini` CLI, or `opencode` CLI

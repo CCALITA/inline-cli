@@ -30,10 +30,16 @@ func NewOpenCodeBackend(binaryPath string) (*OpenCodeBackend, error) {
 
 // openCodeEvent represents a single JSON event from `opencode run --format json`.
 type openCodeEvent struct {
-	Type string `json:"type"`
-	Part struct {
+	Type  string `json:"type"`
+	Part  struct {
 		Text string `json:"text"`
 	} `json:"part"`
+	Error struct {
+		Name string `json:"name"`
+		Data struct {
+			Message string `json:"message"`
+		} `json:"data"`
+	} `json:"error"`
 }
 
 func (b *OpenCodeBackend) Query(messages []Message, model string, onChunk func(text string)) (string, error) {
@@ -68,11 +74,10 @@ func (b *OpenCodeBackend) Query(messages []Message, model string, onChunk func(t
 	// opencode uses `opencode run --format json <message>` for non-interactive mode.
 	// Default format writes to stderr with ANSI codes; JSON format writes
 	// newline-delimited JSON events to stdout which we can parse.
-	args := []string{"run", "--format", "json"}
-	if model != "" {
-		args = append(args, "--model", model)
-	}
-	args = append(args, prompt)
+	// Don't pass --model: opencode uses its own provider/model format
+	// (e.g. "anthropic/claude-sonnet") which differs from the inline-cli
+	// model config. Let opencode use its own configured default.
+	args := []string{"run", "--format", "json", prompt}
 
 	cmd := exec.Command(b.binaryPath, args...)
 
@@ -94,11 +99,23 @@ func (b *OpenCodeBackend) Query(messages []Message, model string, onChunk func(t
 		if err := json.Unmarshal(line, &event); err != nil {
 			continue
 		}
-		if event.Type == "text" && event.Part.Text != "" {
-			fullResponse.WriteString(event.Part.Text)
-			if onChunk != nil {
-				onChunk(event.Part.Text)
+		switch event.Type {
+		case "text":
+			if event.Part.Text != "" {
+				fullResponse.WriteString(event.Part.Text)
+				if onChunk != nil {
+					onChunk(event.Part.Text)
+				}
 			}
+		case "error":
+			msg := event.Error.Data.Message
+			if msg == "" {
+				msg = event.Error.Name
+			}
+			if msg == "" {
+				msg = "unknown error"
+			}
+			return fullResponse.String(), fmt.Errorf("opencode error: %s", msg)
 		}
 	}
 

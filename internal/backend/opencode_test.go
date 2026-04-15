@@ -261,3 +261,42 @@ exit 1
 		t.Errorf("joined chunks = %q, want %q", joined, "partial output")
 	}
 }
+
+func TestOpenCodeBackend_Query_ErrorEvent(t *testing.T) {
+	// Fake script that emits a JSON error event (e.g. invalid model).
+	script := writeFakeScript(t, `
+printf '{"type":"error","error":{"name":"UnknownError","data":{"message":"Model not found: bad-model"}}}\n'
+`)
+
+	b := &OpenCodeBackend{binaryPath: script}
+
+	messages := []Message{
+		{Role: "user", Content: "hello"},
+	}
+
+	_, err := b.Query(messages, "", nil)
+	if err == nil {
+		t.Fatal("expected error from error event, got nil")
+	}
+	if !strings.Contains(err.Error(), "Model not found") {
+		t.Errorf("error = %q, want it to contain 'Model not found'", err.Error())
+	}
+}
+
+func TestOpenCodeBackend_Query_ErrorEventWithName(t *testing.T) {
+	// Error event with name but no message falls back to name.
+	script := writeFakeScript(t, `
+printf '{"type":"error","error":{"name":"ProviderError","data":{}}}\n'
+`)
+
+	b := &OpenCodeBackend{binaryPath: script}
+	messages := []Message{{Role: "user", Content: "hello"}}
+
+	_, err := b.Query(messages, "", nil)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "ProviderError") {
+		t.Errorf("error = %q, want it to contain 'ProviderError'", err.Error())
+	}
+}

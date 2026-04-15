@@ -8,7 +8,7 @@ import (
 )
 
 // GeminiBackend uses the Google `gemini` CLI tool as the backend.
-// It execs `gemini -p <prompt>` and streams stdout.
+// It execs `gemini -p <prompt> -o text` and streams stdout.
 type GeminiBackend struct {
 	// Configured path to the gemini binary. Empty means auto-detect via PATH.
 	configuredPath string
@@ -67,7 +67,11 @@ func (b *GeminiBackend) Query(messages []Message, model string, onChunk func(tex
 		prompt = historyCtx + prompt
 	}
 
-	args := []string{"-p", prompt}
+	// gemini CLI supports -p for non-interactive mode and -o for output format.
+	// Use -o text to get plain text on stdout (default may include ANSI or TUI).
+	// Don't pass --model: gemini uses its own model config and the inline-cli
+	// default (e.g. claude-sonnet) would be invalid for gemini.
+	args := []string{"-p", prompt, "-o", "text"}
 
 	cmd := exec.Command(binaryPath, args...)
 

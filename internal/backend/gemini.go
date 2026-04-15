@@ -82,14 +82,13 @@ func (b *GeminiBackend) Query(messages []Message, model string, onChunk func(tex
 	}
 
 	if err := cmd.Wait(); err != nil {
-		// Extract the first meaningful line from stderr for the error message.
-		errMsg := firstLine(stderrBuf.String())
+		// If we already streamed a response, treat non-zero exit as a warning
+		// (e.g. gemini prints skill conflict warnings to stderr but still
+		// produces valid output). Return the response without an error.
 		if fullResponse.Len() > 0 {
-			if errMsg != "" {
-				return fullResponse.String(), fmt.Errorf("gemini CLI error: %s", errMsg)
-			}
-			return fullResponse.String(), fmt.Errorf("gemini CLI exited with error: %w", err)
+			return fullResponse.String(), nil
 		}
+		errMsg := firstLine(stderrBuf.String())
 		if errMsg != "" {
 			return "", fmt.Errorf("gemini CLI error: %s", errMsg)
 		}

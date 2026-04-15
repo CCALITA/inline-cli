@@ -40,16 +40,22 @@ func TestNewOpenCodeBackend_WithPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if b.binaryPath != path {
-		t.Errorf("binaryPath = %q, want %q", b.binaryPath, path)
+	if b.configuredPath != path {
+		t.Errorf("configuredPath = %q, want %q", b.configuredPath, path)
 	}
 }
 
-func TestNewOpenCodeBackend_EmptyPath_NotFound(t *testing.T) {
-	// Ensure "opencode" is not in PATH by using a minimal PATH.
+func TestOpenCodeBackend_Query_NotInPath(t *testing.T) {
+	// With empty path and opencode not in PATH, Query should fail.
 	t.Setenv("PATH", t.TempDir())
 
-	_, err := NewOpenCodeBackend("")
+	b, err := NewOpenCodeBackend("")
+	if err != nil {
+		t.Fatalf("unexpected error creating backend: %v", err)
+	}
+
+	messages := []Message{{Role: "user", Content: "hello"}}
+	_, err = b.Query(messages, "", nil)
 	if err == nil {
 		t.Fatal("expected error when opencode is not in PATH, got nil")
 	}
@@ -59,7 +65,7 @@ func TestNewOpenCodeBackend_EmptyPath_NotFound(t *testing.T) {
 }
 
 func TestOpenCodeBackend_Query_NoUserMessage(t *testing.T) {
-	b := &OpenCodeBackend{binaryPath: "/bin/echo"}
+	b := &OpenCodeBackend{configuredPath: "/bin/echo"}
 
 	// Only assistant messages, no user message at the end.
 	messages := []Message{
@@ -80,7 +86,7 @@ func TestOpenCodeBackend_Query_SingleMessage(t *testing.T) {
 	// Fake script that emits a JSON text event.
 	script := writeFakeScript(t, fakeOpenCodeJSON("Hello from opencode"))
 
-	b := &OpenCodeBackend{binaryPath: script}
+	b := &OpenCodeBackend{configuredPath: script}
 
 	messages := []Message{
 		{Role: "user", Content: "Say hello"},
@@ -111,7 +117,7 @@ printf '{"type":"text","part":{"text":" world"}}\n'
 printf '{"type":"step_finish","part":{}}\n'
 `)
 
-	b := &OpenCodeBackend{binaryPath: script}
+	b := &OpenCodeBackend{configuredPath: script}
 
 	messages := []Message{
 		{Role: "user", Content: "Say hello world"},
@@ -146,7 +152,7 @@ printf '%s' "$arg" > `+argFile+`
 printf '{"type":"text","part":{"text":"ok"}}\n'
 `)
 
-	b := &OpenCodeBackend{binaryPath: script}
+	b := &OpenCodeBackend{configuredPath: script}
 
 	messages := []Message{
 		{Role: "user", Content: "What is Go?"},
@@ -196,7 +202,7 @@ printf '{"type":"text","part":{"text":"actual output"}}\n'
 printf '{"type":"step_finish","part":{}}\n'
 `)
 
-	b := &OpenCodeBackend{binaryPath: script}
+	b := &OpenCodeBackend{configuredPath: script}
 
 	messages := []Message{{Role: "user", Content: "hello"}}
 
@@ -213,7 +219,7 @@ func TestOpenCodeBackend_Query_BinaryFails(t *testing.T) {
 	// Fake script that exits with non-zero status and no JSON output.
 	script := writeFakeScript(t, `exit 1`)
 
-	b := &OpenCodeBackend{binaryPath: script}
+	b := &OpenCodeBackend{configuredPath: script}
 
 	messages := []Message{
 		{Role: "user", Content: "hello"},
@@ -235,7 +241,7 @@ printf '{"type":"text","part":{"text":"partial output"}}\n'
 exit 1
 `)
 
-	b := &OpenCodeBackend{binaryPath: script}
+	b := &OpenCodeBackend{configuredPath: script}
 
 	messages := []Message{
 		{Role: "user", Content: "hello"},
@@ -268,7 +274,7 @@ func TestOpenCodeBackend_Query_ErrorEvent(t *testing.T) {
 printf '{"type":"error","error":{"name":"UnknownError","data":{"message":"Model not found: bad-model"}}}\n'
 `)
 
-	b := &OpenCodeBackend{binaryPath: script}
+	b := &OpenCodeBackend{configuredPath: script}
 
 	messages := []Message{
 		{Role: "user", Content: "hello"},
@@ -289,7 +295,7 @@ func TestOpenCodeBackend_Query_ErrorEventWithName(t *testing.T) {
 printf '{"type":"error","error":{"name":"ProviderError","data":{}}}\n'
 `)
 
-	b := &OpenCodeBackend{binaryPath: script}
+	b := &OpenCodeBackend{configuredPath: script}
 	messages := []Message{{Role: "user", Content: "hello"}}
 
 	_, err := b.Query(messages, "", nil)

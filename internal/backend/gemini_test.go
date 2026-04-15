@@ -172,6 +172,8 @@ func TestGeminiBackend_Query_BinaryFailsNoStderr(t *testing.T) {
 }
 
 func TestGeminiBackend_Query_PartialOutputThenFail(t *testing.T) {
+	// When gemini produces output but exits non-zero (e.g. skill conflict
+	// warning), the response should be returned without an error.
 	script := writeFakeGeminiScript(t, `
 printf "partial"
 echo "something went wrong" >&2
@@ -186,11 +188,8 @@ exit 1
 		chunks = append(chunks, text)
 	})
 
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "something went wrong") {
-		t.Errorf("error = %q, want stderr content surfaced", err.Error())
+	if err != nil {
+		t.Fatalf("unexpected error: %v (should succeed when output exists)", err)
 	}
 	if result != "partial" {
 		t.Errorf("result = %q, want %q", result, "partial")

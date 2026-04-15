@@ -155,10 +155,18 @@ main() {
   echo ""
   info "installation complete!"
   echo ""
+
+  # Run interactive setup if stdin is a terminal.
+  if [ -t 0 ]; then
+    "$INSTALL_DIR/inline-cli" setup
+  else
+    echo "Run 'inline-cli setup' to configure your backend."
+  fi
+
+  echo ""
   echo "Next steps:"
-  echo "  1. Set your API key:  export ANTHROPIC_API_KEY=sk-ant-..."
-  echo "  2. Restart your shell: exec \$SHELL"
-  echo "  3. Type something and press Ctrl+J (or Shift+Enter in supported terminals)"
+  echo "  1. Restart your shell: exec \$SHELL"
+  echo "  2. Type something and press Ctrl+J (or Shift+Enter in supported terminals)"
   echo ""
 }
 

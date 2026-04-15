@@ -37,6 +37,8 @@ func main() {
 		newStatusCmd(),
 		newStopSessionCmd(),
 		newInitCmd(),
+		newBackendCmd(),
+		newSetupCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {

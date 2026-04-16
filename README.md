@@ -183,28 +183,33 @@ Precedence: env vars > config file > defaults.
 
 ## Supported terminals
 
-### Shift+Enter works natively
+### Shift+Enter works automatically (zsh)
 
-inline-cli auto-detects your terminal and enables the right protocol:
+inline-cli enables the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/)
+during line editing, so Shift+Enter works out of the box in modern terminals:
 
-**Kitty keyboard protocol** (CSI u):
+| Terminal                              | Shift+Enter | Notes                 |
+| ------------------------------------- | ----------- | --------------------- |
+| **Ghostty**                           | Automatic   |                       |
+| **kitty**                             | Automatic   |                       |
+| **WezTerm**                           | Automatic   |                       |
+| **iTerm2** (3.5+)                     | Automatic   |                       |
+| **foot**                              | Automatic   |                       |
+| **xterm**                             | Automatic   | Via modifyOtherKeys   |
+| **VTE-based** (GNOME Terminal, Tilix) | Automatic   |                       |
 
-| Terminal          | Status       |
-| ----------------- | ------------ |
-| **kitty**         | Full support |
-| **WezTerm**       | Full support |
-| **ghostty**       | Full support |
-| **iTerm2** (3.5+) | Full support |
-| **foot**          | Full support |
+### Bash: terminal configuration required
 
-**xterm modifyOtherKeys** (CSI 27;2;13~):
+Bash's readline cannot bind CSI sequences, so Shift+Enter requires a
+terminal-side remap to `\n` (0x0a). <kbd>Ctrl</kbd>+<kbd>J</kbd> always
+works without configuration.
 
-| Terminal                              | Status       |
-| ------------------------------------- | ------------ |
-| **xterm**                             | Full support |
-| **VTE-based** (GNOME Terminal, Tilix) | Full support |
-
-Both protocols are bound automatically — no manual configuration needed.
+| Terminal  | Config                                                             |
+| --------- | ------------------------------------------------------------------ |
+| Ghostty   | `keybind = shift+enter=text:\n`                                    |
+| kitty     | `map shift+enter send_text all \x0a`                               |
+| WezTerm   | `{ key = "Enter", mods = "SHIFT", action = SendString("\x0a") }`  |
+| iTerm2    | Keys > Key Mappings > Shift+Return > Send Hex Code `0a`           |
 
 ### Fallback: Ctrl+J
 
@@ -215,7 +220,7 @@ Terminals that support neither protocol use <kbd>Ctrl</kbd>+<kbd>J</kbd>:
 | **Terminal.app** (macOS) | <kbd>Ctrl</kbd>+<kbd>J</kbd> |
 | **Alacritty**            | <kbd>Ctrl</kbd>+<kbd>J</kbd> |
 
-> **tmux note:** Extended key sequences are stripped by default. <kbd>Ctrl</kbd>+<kbd>J</kbd> always works. For Shift+Enter, add `set -g extended-keys on` to your tmux config.
+> **tmux note:** Extended key sequences are stripped by default. <kbd>Ctrl</kbd>+<kbd>J</kbd> always works. For Shift+Enter, add `set -g extended-keys on` and `set -g extended-keys-format csi-u` to your tmux config.
 
 ## Prompt indicator
 

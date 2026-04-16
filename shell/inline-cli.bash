@@ -33,18 +33,16 @@ _inline_cli_query() {
 #
 # Ctrl+J (\C-j) is the primary binding — works in every terminal.
 #
-# Shift+Enter setup:
-#   Configure your terminal to send \n (LF) for Shift+Enter.
-#   Regular Enter sends \r (CR) → accept-line. Shift+Enter sends \n → our function.
+# Why Shift+Enter doesn't auto-work in bash:
+#   Bash's readline cannot bind CSI escape sequences like \e[13;2u.
+#   Even with the kitty keyboard protocol enabled, readline won't
+#   recognize the sequence. The only way to get Shift+Enter in bash
+#   is to configure your terminal to remap it to \n (0x0a = Ctrl+J):
 #
-#   Ghostty:  keybind = shift+enter=text:\n
-#   kitty:    map shift+enter send_text all \x0a
-#   WezTerm:  { key = "Enter", mods = "SHIFT", action = SendString("\x0a") }
-#   iTerm2:   Keys > Key Mappings > Shift+Return → Send Hex Code 0a
-#
-# Bash's bind cannot capture raw CSI sequences the way zsh's bindkey can,
-# so Ctrl+J is the reliable binding. Terminals that remap Shift+Enter to
-# \n (0x0a = Ctrl+J) will trigger this automatically.
+#     Ghostty:  keybind = shift+enter=text:\n
+#     kitty:    map shift+enter send_text all \x0a
+#     WezTerm:  { key = "Enter", mods = "SHIFT", action = SendString("\x0a") }
+#     iTerm2:   Keys > Key Mappings > Shift+Return → Send Hex Code 0a
 
 bind -x '"\C-j": _inline_cli_query'
 

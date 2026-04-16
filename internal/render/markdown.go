@@ -2,6 +2,8 @@ package render
 
 import (
 	"bytes"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/glamour"
@@ -16,12 +18,51 @@ type Markdown struct {
 // NewMarkdown creates a new markdown renderer.
 func NewMarkdown(width int) *Markdown {
 	r, _ := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		resolveGlamourStyle(),
 		glamour.WithWordWrap(width),
 	)
 	return &Markdown{
 		renderer: r,
 	}
+}
+
+// resolveGlamourStyle picks a glamour style without sending OSC queries
+// to the terminal. glamour.WithAutoStyle() triggers a termenv OSC 11
+// background-color query that blocks for up to 5 seconds if the terminal
+// doesn't respond. This function avoids that by using only env vars.
+//
+// Detection order:
+//  1. GLAMOUR_STYLE env var (explicit user override)
+//  2. COLORFGBG env var (passive terminal hint, no I/O)
+//  3. Default to "dark" (safest assumption for developer terminals)
+func resolveGlamourStyle() glamour.TermRendererOption {
+	if style := os.Getenv("GLAMOUR_STYLE"); style != "" {
+		return glamour.WithStylePath(style)
+	}
+
+	if colorFGBG := os.Getenv("COLORFGBG"); colorFGBG != "" {
+		if isDarkFromCOLORFGBG(colorFGBG) {
+			return glamour.WithStandardStyle("dark")
+		}
+		return glamour.WithStandardStyle("light")
+	}
+
+	return glamour.WithStandardStyle("dark")
+}
+
+// isDarkFromCOLORFGBG parses the COLORFGBG environment variable (format: "fg;bg")
+// and returns true if the background indicates a dark terminal.
+// Uses vim's heuristic: ANSI colors 0-6 are dark backgrounds, 7+ are light.
+func isDarkFromCOLORFGBG(value string) bool {
+	parts := strings.Split(value, ";")
+	if len(parts) < 2 {
+		return true
+	}
+	bg, err := strconv.Atoi(parts[len(parts)-1])
+	if err != nil {
+		return true
+	}
+	return bg >= 0 && bg <= 6
 }
 
 // RenderFull renders a complete markdown string.

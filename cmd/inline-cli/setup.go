@@ -8,8 +8,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/CCALITA/inline-cli/internal/config"
+	"github.com/CCALITA/inline-cli/internal/render"
 )
 
 func newSetupCmd() *cobra.Command {
@@ -56,19 +58,19 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		if existing == "" {
 			fmt.Println()
 			fmt.Print("Enter your Anthropic API key (or press Enter to skip): ")
-			line, err := reader.ReadString('\n')
+			keyBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+			fmt.Println() // newline after hidden input
 			if err != nil {
 				return fmt.Errorf("failed to read input: %w", err)
 			}
-			key := strings.TrimSpace(line)
+			key := strings.TrimSpace(string(keyBytes))
 			if key != "" {
-				fmt.Println()
 				fmt.Println("Add this to your shell profile:")
 				fmt.Printf("  export ANTHROPIC_API_KEY='%s'\n", strings.ReplaceAll(key, "'", "'\\''"))
 			}
 		} else {
 			fmt.Println()
-			fmt.Println("\033[32m✓\033[0m ANTHROPIC_API_KEY is already set")
+			fmt.Printf("%s ANTHROPIC_API_KEY is already set\n", render.Green("✓"))
 		}
 	}
 
@@ -77,7 +79,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("\033[32m✓\033[0m Backend set to %q\n", chosen.Name)
+	fmt.Printf("%s Backend set to %q\n", render.Green("✓"), chosen.Name)
 	restartDaemonIfRunning()
 
 	fmt.Println()

@@ -41,22 +41,88 @@ zle -N _inline_cli_widget
 
 # ── Keybinding ─────────────────────────────────────────────────────────
 #
-# Shift+Enter setup:
-#   Configure your terminal to send \n (LF) for Shift+Enter.
-#   Regular Enter sends \r (CR) → accept-line. Shift+Enter sends \n → our widget.
+# Shift+Enter triggers the inline-cli widget.
 #
-#   Ghostty:  keybind = shift+enter=text:\n
-#   kitty:    map shift+enter send_text all \x0a
-#   WezTerm:  { key = "Enter", mods = "SHIFT", action = SendString("\x0a") }
-#   iTerm2:   Keys > Key Mappings > Shift+Return → Send Hex Code 0a
+# How it works:
+#   The kitty keyboard protocol is enabled via zle-line-init (below),
+#   which makes modern terminals send \e[13;2u for Shift+Enter.
+#   This works automatically in iTerm2 3.5+, kitty, WezTerm, Ghostty, foot.
 #
-# Also bind CSI sequences for terminals that natively distinguish Shift+Enter:
-#   \e[13;2u     kitty keyboard protocol
-#   \e[27;2;13~  xterm modifyOtherKeys
+#   For terminals using xterm's modifyOtherKeys, \e[27;2;13~ is also bound.
+#
+#   Ctrl+J (^J) is always available as a universal fallback.
+#
+# Legacy terminals (no protocol support):
+#   Configure your terminal to send \n (0x0a) for Shift+Enter:
+#     Ghostty:  keybind = shift+enter=text:\n
+#     kitty:    map shift+enter send_text all \x0a
+#     WezTerm:  { key = "Enter", mods = "SHIFT", action = SendString("\x0a") }
+#     iTerm2:   Keys > Key Mappings > Shift+Return → Send Hex Code 0a
+#   (These are fallbacks — the protocol approach above is preferred.)
 
 bindkey '^J'           _inline_cli_widget
 bindkey '\e[13;2u'     _inline_cli_widget
 bindkey '\e[27;2;13~'  _inline_cli_widget
+
+# ── Kitty keyboard protocol ───────────────────────────────────────────
+#
+# Enable the kitty keyboard protocol so terminals that support it
+# (iTerm2 3.5+, kitty, WezTerm, foot, Ghostty) send CSI u sequences
+# for modified keys. This makes Shift+Enter send \e[13;2u which we
+# bind above.
+#
+# The protocol is pushed on zle-line-init and popped on zle-line-finish,
+# so it only affects ZLE (line editing) — it never leaks into command
+# execution or subshells.
+#
+# Safe chaining: if another plugin (oh-my-zsh, fzf, vi-mode, etc.)
+# already defined zle-line-init, we wrap it rather than clobbering it.
+
+_inline_cli_kitty_push() {
+  printf '\e[>1u'
+}
+
+_inline_cli_kitty_pop() {
+  printf '\e[<u'
+}
+
+# -- zle-line-init hook (chain-safe) --
+if (( ! ${+functions[_inline_cli_zle-line-init]} )); then
+  case "${widgets[zle-line-init]:-}" in
+    builtin|"")
+      _inline_cli_zle-line-init() {
+        _inline_cli_kitty_push
+      }
+      ;;
+    user:*)
+      zle -A zle-line-init _inline_cli_orig_zle-line-init
+      _inline_cli_zle-line-init() {
+        _inline_cli_kitty_push
+        zle _inline_cli_orig_zle-line-init -- "$@"
+      }
+      ;;
+  esac
+  zle -N zle-line-init _inline_cli_zle-line-init
+fi
+
+# -- zle-line-finish hook (chain-safe) --
+if (( ! ${+functions[_inline_cli_zle-line-finish]} )); then
+  case "${widgets[zle-line-finish]:-}" in
+    builtin|"")
+      _inline_cli_zle-line-finish() {
+        _inline_cli_kitty_pop
+      }
+      ;;
+    user:*)
+      zle -A zle-line-finish _inline_cli_orig_zle-line-finish
+      _inline_cli_zle-line-finish() {
+        zle _inline_cli_orig_zle-line-finish -- "$@"
+        _inline_cli_kitty_pop
+      }
+      ;;
+  esac
+  zle -N zle-line-finish _inline_cli_zle-line-finish
+fi
 
 # ── Directory change hook ──────────────────────────────────────────────
 

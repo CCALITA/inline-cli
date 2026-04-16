@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -18,6 +19,10 @@ import (
 
 var version = "dev"
 
+// errAlreadyDisplayed signals that the error was already shown to the user
+// via the renderer — cobra should not print it again.
+var errAlreadyDisplayed = fmt.Errorf("")
+
 //go:embed shell_zsh.sh
 var zshScript string
 
@@ -26,9 +31,22 @@ var bashScript string
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:     "inline-cli",
-		Short:   "Inline Claude assistant for your terminal",
-		Version: version,
+		Use:   "inline-cli",
+		Short: "Inline Claude assistant for your terminal",
+		Long: `Inline Claude assistant for your terminal.
+
+Type a question directly in your shell prompt and press Ctrl+J (or Shift+Enter
+in supported terminals) to get an AI response streamed inline — no context
+switching needed.
+
+Quick start:
+  1. Run 'inline-cli setup' to choose a backend
+  2. Add shell integration: eval "$(inline-cli init zsh)"  (or bash)
+  3. Restart your shell and start asking questions with Ctrl+J
+
+Shift+Enter requires terminal configuration — see 'inline-cli init --help'.`,
+		Version:       version,
+		SilenceErrors: true,
 	}
 
 	rootCmd.AddCommand(
@@ -42,7 +60,9 @@ func main() {
 	)
 
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if err != errAlreadyDisplayed {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		os.Exit(1)
 	}
 }
@@ -130,7 +150,7 @@ func runDaemonStart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println("daemon started")
+	fmt.Printf("%s daemon started\n", render.Green("✓"))
 	return nil
 }
 
@@ -145,7 +165,7 @@ func runDaemonStop(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println("daemon stopped")
+	fmt.Printf("%s daemon stopped\n", render.Green("✓"))
 	return nil
 }
 
@@ -195,9 +215,9 @@ func runQuery(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to start daemon: %w", err)
 	}
 
-	// Give daemon a moment to start listening.
-	if !d.IsRunning() {
-		time.Sleep(200 * time.Millisecond)
+	// Wait for the daemon socket to become available.
+	if err := waitForSocket(cfg.SocketPath, 3*time.Second); err != nil {
+		return fmt.Errorf("daemon started but socket not ready: %w", err)
 	}
 
 	client := ipc.NewClient(cfg.SocketPath)
@@ -206,7 +226,7 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	renderer := render.NewRenderer(os.Stdout)
 	var md *render.Markdown
 	if !raw {
-		md = render.NewMarkdown(80)
+		md = render.NewMarkdown(renderer.Width())
 	}
 
 	ch, err := client.Query(dir, prompt, requestID)
@@ -253,7 +273,7 @@ func runQuery(cmd *cobra.Command, args []string) error {
 				renderer.ClearThinking()
 			}
 			renderer.ShowError(resp.Message)
-			return fmt.Errorf("query failed: %s", resp.Message)
+			return errAlreadyDisplayed
 		}
 	}
 
@@ -328,4 +348,22 @@ func runInit(cmd *cobra.Command, args []string) error {
 	script = strings.ReplaceAll(script, "{{INLINE_CLI_BIN}}", binaryPath)
 	fmt.Print(script)
 	return nil
+}
+
+// waitForSocket polls until the Unix socket is accepting connections or the timeout expires.
+func waitForSocket(socketPath string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	delay := 50 * time.Millisecond
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("unix", socketPath, 100*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return nil
+		}
+		time.Sleep(delay)
+		if delay < 400*time.Millisecond {
+			delay *= 2
+		}
+	}
+	return fmt.Errorf("timed out waiting for socket %s", socketPath)
 }

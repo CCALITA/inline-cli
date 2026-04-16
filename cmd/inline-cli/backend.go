@@ -10,6 +10,7 @@ import (
 
 	"github.com/CCALITA/inline-cli/internal/config"
 	"github.com/CCALITA/inline-cli/internal/daemon"
+	"github.com/CCALITA/inline-cli/internal/render"
 )
 
 // backendInfo describes a supported backend.
@@ -39,9 +40,9 @@ func (b backendInfo) installStatus() string {
 		return ""
 	}
 	if b.isInstalled() {
-		return "  \033[32m✓ installed\033[0m"
+		return "  " + render.Green("✓ installed")
 	}
-	return "  \033[31m✗ not found\033[0m"
+	return "  " + render.Red("✗ not found")
 }
 
 func findBackend(name string) (backendInfo, bool) {
@@ -72,7 +73,7 @@ func restartDaemonIfRunning() {
 		if err := d.Stop(); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to stop daemon: %v\n", err)
 		} else {
-			fmt.Println("Daemon stopped. Next query will use the new backend.")
+			fmt.Printf("%s daemon stopped. Next query will use the new backend.\n", render.Green("✓"))
 		}
 	}
 }
@@ -160,7 +161,7 @@ func runBackendSet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("Backend set to %q\n", name)
+	fmt.Printf("%s Backend set to %q\n", render.Green("✓"), name)
 	restartDaemonIfRunning()
 
 	return nil

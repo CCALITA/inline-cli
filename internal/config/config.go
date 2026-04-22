@@ -39,7 +39,10 @@ type Config struct {
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() Config {
 	uid := os.Getuid()
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = os.TempDir()
+	}
 	return Config{
 		Backend:               "api",
 		Model:                 "claude-sonnet-4-20250514",
@@ -104,7 +107,10 @@ func Load() (Config, error) {
 }
 
 func configFilePath() string {
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = os.TempDir()
+	}
 	return filepath.Join(homeDir, ".inline-cli", "config.toml")
 }
 

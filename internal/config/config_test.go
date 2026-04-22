@@ -29,7 +29,7 @@ func TestDefaultConfig_BackendName(t *testing.T) {
 	}{
 		{name: "empty backend defaults to api", backend: "", want: "api"},
 		{name: "api backend", backend: "api", want: "api"},
-		{name: "cli backend", backend: "cli", want: "cli"},
+		{name: "claude backend", backend: "claude", want: "claude"},
 		{name: "opencode backend", backend: "opencode", want: "opencode"},
 	}
 

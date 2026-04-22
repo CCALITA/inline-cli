@@ -32,8 +32,8 @@ var bashScript string
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "inline-cli",
-		Short: "Inline Claude assistant for your terminal",
-		Long: `Inline Claude assistant for your terminal.
+		Short: "Inline AI assistant for your terminal",
+		Long: `Inline AI assistant for your terminal.
 
 Type a question directly in your shell prompt and press Ctrl+J (or Shift+Enter
 in supported terminals) to get an AI response streamed inline — no context
@@ -98,7 +98,12 @@ func newDaemonCmd() *cobra.Command {
 func newQueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query",
-		Short: "Send a prompt to Claude",
+		Short: "Send a prompt to the AI backend",
+		Long: `Send a prompt to the configured AI backend and stream the response.
+
+Use --prompt to pass the prompt text, or pass it as trailing arguments.
+Use --dir to override the working directory (affects session scoping).
+Use --raw to skip markdown rendering and output plain text.`,
 		RunE:  runQuery,
 	}
 
@@ -145,7 +150,10 @@ func runDaemonStart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	d := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
+	d, err := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
+	if err != nil {
+		return err
+	}
 	if err := d.Start(); err != nil {
 		return err
 	}
@@ -160,7 +168,10 @@ func runDaemonStop(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	d := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
+	d, err := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
+	if err != nil {
+		return err
+	}
 	if err := d.Stop(); err != nil {
 		return err
 	}
@@ -210,7 +221,10 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	raw, _ := cmd.Flags().GetBool("raw")
 
 	// Auto-start daemon if not running.
-	d := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
+	d, err := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
+	if err != nil {
+		return err
+	}
 	if err := d.EnsureRunning(); err != nil {
 		return fmt.Errorf("failed to start daemon: %w", err)
 	}
@@ -286,7 +300,10 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	d := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
+	d, err := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
+	if err != nil {
+		return err
+	}
 	if !d.IsRunning() {
 		fmt.Println("daemon is not running")
 		return nil

@@ -68,7 +68,11 @@ func restartDaemonIfRunning() {
 		fmt.Fprintf(os.Stderr, "Warning: could not reload config: %v\n", err)
 		return
 	}
-	d := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
+	d, err := daemon.NewDaemon(cfg.PIDFile, cfg.SocketPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		return
+	}
 	if d.IsRunning() {
 		if err := d.Stop(); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to stop daemon: %v\n", err)

@@ -2,6 +2,7 @@ package backend
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/CCALITA/inline-cli/internal/claude"
 )
@@ -40,22 +41,22 @@ func (b *APIBackend) Query(messages []Message, model string, onChunk func(text s
 		return "", fmt.Errorf("API stream failed: %w", err)
 	}
 
-	var fullResponse string
+	var fullResponse strings.Builder
 	for event := range ch {
 		switch event.Type {
 		case "content_block_delta":
 			if event.Delta != nil {
-				fullResponse += event.Delta.Text
+				fullResponse.WriteString(event.Delta.Text)
 				if onChunk != nil {
 					onChunk(event.Delta.Text)
 				}
 			}
 		case "error":
 			if event.Error != nil {
-				return fullResponse, event.Error
+				return fullResponse.String(), event.Error
 			}
 		}
 	}
 
-	return fullResponse, nil
+	return fullResponse.String(), nil
 }

@@ -42,14 +42,12 @@ func NewServer(cfg config.Config) (*Server, error) {
 // createBackend creates the appropriate backend based on config.
 func createBackend(cfg config.Config) (backend.Backend, error) {
 	switch cfg.Backend {
-	case "claude", "cli":
+	case "claude":
 		return backend.NewCLIBackend(cfg.CLIPath)
 	case "gemini":
 		return backend.NewGeminiBackend(cfg.GeminiPath)
 	case "opencode":
 		return backend.NewOpenCodeBackend(cfg.OpenCodePath)
-	case "acp":
-		return backend.NewACPBackend()
 	case "api", "":
 		return backend.NewAPIBackend(cfg.APIKey, cfg.APIBaseURL)
 	default:
@@ -67,7 +65,10 @@ func (s *Server) Run() error {
 		return fmt.Errorf("failed to listen on %s: %w", s.cfg.SocketPath, err)
 	}
 
-	os.Chmod(s.cfg.SocketPath, 0600)
+	if err := os.Chmod(s.cfg.SocketPath, 0600); err != nil {
+		s.listener.Close()
+		return fmt.Errorf("failed to set socket permissions: %w", err)
+	}
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

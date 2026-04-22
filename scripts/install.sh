@@ -39,7 +39,6 @@ shell_config_file() {
   case "$1" in
     zsh)  echo "${ZDOTDIR:-$HOME}/.zshrc" ;;
     bash) echo "$HOME/.bashrc" ;;
-    fish) echo "${XDG_CONFIG_HOME:-$HOME/.config}/fish/config.fish" ;;
     *)    echo "" ;;
   esac
 }

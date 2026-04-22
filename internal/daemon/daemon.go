@@ -18,13 +18,16 @@ type Daemon struct {
 }
 
 // NewDaemon creates a new daemon manager.
-func NewDaemon(pidFile, socketPath string) *Daemon {
-	binary, _ := os.Executable()
+func NewDaemon(pidFile, socketPath string) (*Daemon, error) {
+	binary, err := os.Executable()
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine binary path: %w", err)
+	}
 	return &Daemon{
 		pidFile:    pidFile,
 		socketPath: socketPath,
 		binary:     binary,
-	}
+	}, nil
 }
 
 // Start launches the daemon as a background process.

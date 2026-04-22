@@ -18,7 +18,7 @@
 ![inline-cli4](https://github.com/user-attachments/assets/be431ede-4b5f-4484-8547-8032633d0a92)
 
 No context switching. No new window. The answer streams in below your prompt and you keep working.
-Just press shift with enter to trigger claude response.
+Just press Shift+Enter to trigger an AI response.
 
 ## Install
 
@@ -53,10 +53,11 @@ exec $SHELL
 
 ```
  ┌─────────────────┐     Unix socket     ┌──────────────┐     HTTPS/SSE     ┌───────────┐
- │  shell widget    │ ──────────────────> │  daemon      │ ─────────────────>│ Claude API│
- │  captures buffer │ <── NDJSON stream── │  per-dir     │ <── streaming ──  │           │
+ │  shell widget    │ ──────────────────> │  daemon      │ ─────────────────>│  AI       │
+ │  captures buffer │ <── NDJSON stream── │  per-dir     │ <── streaming ──  │  backend  │
  │  renders output  │                     │  sessions    │                   └───────────┘
- └─────────────────┘                     │              │        or
+ └─────────────────┘                     │              │
+                                          │              │ ───> Anthropic API
                                           │              │ ───> claude CLI
                                           │              │ ───> gemini CLI
                                           │              │ ───> opencode CLI
@@ -100,8 +101,8 @@ The daemon starts itself on the first query. No setup, no `systemd`, no `launchd
 The primary interface is the keybinding — type and press <kbd>Shift</kbd>+<kbd>Enter</kbd> or <kbd>Ctrl</kbd>+<kbd>J</kbd>. But you can also use the CLI directly:
 
 ```sh
-# Direct query
-shift + enter
+# Ask a question (type in your shell, then press Shift+Enter or Ctrl+J)
+
 # Check what's running
 inline-cli status
 
@@ -269,7 +270,6 @@ inline-cli/
 │   ├── ipc/              # IPC protocol (NDJSON over Unix socket)
 │   ├── render/           # Terminal renderer + markdown (glamour)
 │   └── session/          # Directory-scoped session manager
-├── shell/                # Shell integration scripts (zsh, bash)
 └── scripts/              # Install/uninstall scripts
 ```
 

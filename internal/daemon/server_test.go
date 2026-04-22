@@ -34,9 +34,9 @@ func TestCreateBackend_UnknownBackend(t *testing.T) {
 	}
 }
 
-func TestCreateBackend_CLI(t *testing.T) {
+func TestCreateBackend_Claude(t *testing.T) {
 	cfg := config.Config{
-		Backend: "cli",
+		Backend: "claude",
 		CLIPath: "/usr/local/bin/claude",
 	}
 

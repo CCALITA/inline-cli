@@ -139,7 +139,7 @@ autoload -Uz add-zsh-hook
 add-zsh-hook chpwd _inline_cli_chpwd
 
 # ── Prompt indicator ──────────────────────────────────────────────────
-# Shows ● only when there is an active session for the current directory.
+# Shows 👀 only when there is an active session for the current directory.
 
 # Powerlevel10k custom segment (called by p10k if registered).
 prompt_inline_cli() {
@@ -167,7 +167,7 @@ if [[ -z "$INLINE_CLI_NO_PROMPT" ]]; then
     # on a line above the prompt so it doesn't interfere.
     _inline_cli_starship_precmd() {
       if [[ "$_INLINE_CLI_SESSION_DIR" == "$PWD" ]]; then
-        print -P "%F{green}● inline-cli%f"
+        print -P "👀 %F{green}inline-cli%f"
       fi
     }
     add-zsh-hook precmd _inline_cli_starship_precmd

@@ -67,7 +67,7 @@ else
 fi
 
 # ── Prompt indicator ──────────────────────────────────────────────────
-# Shows ● only when there is an active session for the current directory.
+# Shows 👀 only when there is an active session for the current directory.
 
 _inline_cli_indicator() {
   if [[ "$_INLINE_CLI_SESSION_DIR" == "$PWD" ]]; then
